@@ -1,0 +1,73 @@
+[
+  {
+    "_id": "67dc2f8af6d0256d2de45f4d",
+    "file_name": "Training Data",
+    "upload_date": "2025-03-20 15:08:58.185000",
+    "collection_name": "train",
+    "object_count": 18646,
+    "sample_type": "train",
+    "source_data_included": true
+  },
+  {
+    "_id": "67dc2fc8f6d0256d2de4a824",
+    "file_name": "Validation Data",
+    "upload_date": "2025-03-20 15:10:00.560000",
+    "collection_name": "validate",
+    "object_count": 2331,
+    "sample_type": "validate",
+    "source_data_included": true
+  },
+  {
+    "_id": "67dc2fd1f6d0256d2de4b140",
+    "file_name": "Test Data",
+    "upload_date": "2025-03-20 15:10:09.260000",
+    "collection_name": "test",
+    "object_count": 2331,
+    "sample_type": "test",
+    "source_data_included": true
+  },
+  {
+    "_id": "67e8fac3eaa3a9ce74908e0b",
+    "file_name": "Seismic Data",
+    "collection_name": "seismic",
+    "upload_date": "2025-03-30 03:03:15.423000",
+    "object_count": 30
+  },
+  {
+    "_id": "681470431bb80ae5db0380a1",
+    "file_name": "Raw Events Dataset",
+    "collection_name": "raw_events",
+    "object_count": 52225,
+    "upload_date": "2025-05-02 00:00:00"
+  },
+  {
+    "_id": "681d0dda8ca46d250ad25110",
+    "file_name": "Test 2",
+    "collection_name": "user_test_2_1746734536627",
+    "upload_date": "2025-05-08 20:02:34.079000",
+    "object_count": 2331,
+    "upload_type": "json",
+    "has_embeddings": true,
+    "has_event_lists": false
+  },
+  {
+    "_id": "68b9fd61ec38d93dd6e0a089",
+    "file_name": "All Data",
+    "collection_name": "51k_v2_shuffled_without_test_data",
+    "upload_date": "2025-05-08 20:02:34.079000",
+    "object_count": 51450,
+    "upload_type": "json",
+    "has_embeddings": true,
+    "has_event_lists": false
+  },
+  {
+    "_id": "68b9ffcdec38d93dd6e0a08a",
+    "file_name": "All Data with Test",
+    "collection_name": "51k_v2_shuffled",
+    "upload_date": "2025-05-08 20:02:34.079000",
+    "object_count": 51450,
+    "upload_type": "json",
+    "has_embeddings": true,
+    "has_event_lists": false
+  }
+]

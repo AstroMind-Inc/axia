@@ -1,0 +1,14 @@
+{
+  "name": "pca_64_vector_search",
+  "type": "vectorSearch",
+  "definition": {
+    "fields": [
+      {
+        "type": "vector",
+        "path": "pca_64d",
+        "numDimensions": 64,
+        "similarity": "cosine"
+      }
+    ]
+  }
+}

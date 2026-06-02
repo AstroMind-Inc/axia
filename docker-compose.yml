@@ -1,0 +1,117 @@
+name: axia
+
+services:
+  # ---------------------------------------------------------------------------
+  # MongoDB — only started when MONGODB_MODE=local (profile=local)
+  # ---------------------------------------------------------------------------
+  mongo:
+    profiles: ["local"]
+    image: mongo:7
+    container_name: axia-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: ${MONGODB_DB:-axia}
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  # ---------------------------------------------------------------------------
+  # mongo-init — seeds sample data on first boot
+  # ---------------------------------------------------------------------------
+  mongo-init:
+    profiles: ["local"]
+    image: mongo:7
+    container_name: axia-mongo-init
+    depends_on:
+      mongo:
+        condition: service_healthy
+    environment:
+      MONGODB_URI: ${MONGODB_URI:-mongodb://mongo:27017}
+      MONGODB_DB: ${MONGODB_DB:-axia}
+      MONGODB_CORPUS_COLLECTION: ${MONGODB_CORPUS_COLLECTION:-sources}
+      MONGODB_METADATA_COLLECTION: ${MONGODB_METADATA_COLLECTION:-metadata_records}
+    volumes:
+      - ./data/samples:/seed:ro
+      - ./scripts/mongo-init:/init:ro
+    entrypoint: ["bash", "/init/load_sample.sh"]
+    restart: "no"
+
+  # ---------------------------------------------------------------------------
+  # service — FastAPI multi-agent orchestrator
+  # ---------------------------------------------------------------------------
+  service:
+    build:
+      context: ./service
+      dockerfile: Dockerfile
+    container_name: axia-service
+    restart: unless-stopped
+    ports:
+      - "${SERVICE_PORT:-8000}:8000"
+    environment:
+      MONGODB_URI: ${MONGODB_URI:-mongodb://mongo:27017}
+      MONGODB_DB: ${MONGODB_DB:-axia}
+      MONGODB_CORPUS_COLLECTION: ${MONGODB_CORPUS_COLLECTION:-sources}
+      MONGODB_METADATA_COLLECTION: ${MONGODB_METADATA_COLLECTION:-metadata_records}
+      MODEL_SERVER_URL: ${MODEL_SERVER_URL:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_DEFAULT_MODEL: ${OPENAI_DEFAULT_MODEL:-gpt-5-mini}
+      SERVICE_LOG_LEVEL: ${SERVICE_LOG_LEVEL:-info}
+      SERVICE_DEBUG: ${SERVICE_DEBUG:-false}
+    depends_on:
+      # On local Mongo, wait for the seed to finish.
+      # On external Mongo, this dependency is silently skipped (no container).
+      mongo-init:
+        condition: service_completed_successfully
+        required: false
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health',timeout=2).status==200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  # webapp — Next.js 15 playground
+  # ---------------------------------------------------------------------------
+  webapp:
+    build:
+      context: ./webapp
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+        NEXT_PUBLIC_MONGODB_URI: ${NEXT_PUBLIC_MONGODB_URI:-mongodb://localhost:27017}
+        NEXT_PUBLIC_MONGODB_DB: ${NEXT_PUBLIC_MONGODB_DB:-axia}
+        NEXT_PUBLIC_MONGODB_MODE: ${NEXT_PUBLIC_MONGODB_MODE:-local}
+    container_name: axia-webapp
+    restart: unless-stopped
+    ports:
+      - "${WEBAPP_PORT:-3000}:3000"
+    environment:
+      # Server-side (used by API routes running in Node)
+      SERVICE_URL: http://service:8000
+      MODEL_SERVER_URL: ${MODEL_SERVER_URL:-}
+      MONGODB_URI: ${MONGODB_URI:-mongodb://mongo:27017}
+      MONGODB_DB: ${MONGODB_DB:-axia}
+      MONGODB_MODE: ${MONGODB_MODE:-local}
+      MONGODB_CORPUS_COLLECTION: ${MONGODB_CORPUS_COLLECTION:-sources}
+      MONGODB_METADATA_COLLECTION: ${MONGODB_METADATA_COLLECTION:-metadata_records}
+      # Client-side (NEXT_PUBLIC_* are baked into the bundle at build-time;
+      # we re-pass them here in case any client code reads them at runtime)
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      NEXT_PUBLIC_MONGODB_URI: ${NEXT_PUBLIC_MONGODB_URI:-mongodb://localhost:27017}
+      NEXT_PUBLIC_MONGODB_DB: ${NEXT_PUBLIC_MONGODB_DB:-axia}
+      NEXT_PUBLIC_MONGODB_MODE: ${NEXT_PUBLIC_MONGODB_MODE:-local}
+      NEXT_PUBLIC_DEBUG: ${NEXT_PUBLIC_DEBUG:-false}
+    depends_on:
+      service:
+        condition: service_healthy
+
+volumes:
+  mongo-data:
+    name: axia-mongo-data

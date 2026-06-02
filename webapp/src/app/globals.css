@@ -1,0 +1,795 @@
+/* app/globals.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Light mode space theme colors */
+  --space-bg-dark: #f5f7fa;
+  --space-bg-medium: #e9ecef;
+  --cosmic-dust: #7E57C2;
+  --nebula-pink: #E91E63;
+  --stellar-white: #1A1A1A;
+  --cosmic-blue: #185A8C;
+  --pulsar-cyan: #00B8D4;
+  --card-bg: rgba(255, 255, 255, 0.8);
+  --border-color: rgba(209, 213, 219, 0.8);
+}
+
+.dark {
+  /* Dark mode space theme colors */
+  --space-bg-dark: #070818;
+  --space-bg-medium: #1A0E2E;
+  --cosmic-dust: #7E57C2;
+  --nebula-pink: #E91E63;
+  --stellar-white: #F8F9FA;
+  --cosmic-blue: #185A8C;
+  --pulsar-cyan: #00B8D4;
+  --card-bg: rgba(22, 20, 39, 0.8);
+  --border-color: rgba(31, 41, 55, 0.8);
+}
+
+/* Add atom animation keyframes */
+@keyframes atomPulse {
+  0% { transform: scale(1) rotate(0deg); }
+  50% { transform: scale(1.1) rotate(180deg); }
+  100% { transform: scale(1) rotate(360deg); }
+}
+
+@keyframes electronOrbit {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes selfRotate {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse {
+  0% { opacity: 0.6; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.05); }
+  100% { opacity: 0.6; transform: scale(1); }
+}
+
+@keyframes rotate {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes orbitRotate {
+  0% { transform: rotate(0deg) translateX(0) rotate(0deg); }
+  100% { transform: rotate(360deg) translateX(0) rotate(-360deg); }
+}
+
+/* Create a pure breathing animation for the sparkles */
+@keyframes sparkleBreath {
+  0% {
+    opacity: 0.8;
+    transform: scale(0.9);
+    filter: drop-shadow(0 0 3px rgba(0, 224, 255, 0.3));
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.1);
+    filter: drop-shadow(0 0 8px rgba(0, 224, 255, 0.7));
+  }
+  100% {
+    opacity: 0.8;
+    transform: scale(0.9);
+    filter: drop-shadow(0 0 3px rgba(0, 224, 255, 0.3));
+  }
+}
+
+@keyframes glowing {
+  0% { filter: drop-shadow(0 0 2px rgba(0, 224, 255, 0.2)); opacity: 0.7; }
+  50% { filter: drop-shadow(0 0 8px rgba(0, 224, 255, 0.6)); opacity: 0.9; }
+  100% { filter: drop-shadow(0 0 2px rgba(0, 224, 255, 0.2)); opacity: 0.7; }
+}
+
+@keyframes twinkle {
+  0%, 100% { opacity: 0.2; }
+  50% { opacity: 1; }
+}
+
+@keyframes float {
+  0% { transform: translateY(0px) translateX(0px); }
+  25% { transform: translateY(-2px) translateX(2px); }
+  50% { transform: translateY(0px) translateX(0px); }
+  75% { transform: translateY(2px) translateX(-2px); }
+  100% { transform: translateY(0px) translateX(0px); }
+}
+
+@layer base {
+  * {
+    /* Remove the problematic utility classes completely */
+    border-color: var(--border-color);
+  }
+
+  body {
+    @apply min-h-screen antialiased overflow-x-hidden;
+    background: linear-gradient(135deg, var(--space-bg-dark), var(--space-bg-medium));
+    background-attachment: fixed;
+    color: var(--stellar-white);
+  }
+  :root {
+    /* Light mode shadcn variables */
+    --background: 0 0% 100%;
+    --foreground: 0 0% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 3.9%;
+    --primary: 0 0% 9%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 0 0% 96.1%;
+    --secondary-foreground: 0 0% 9%;
+    --muted: 0 0% 96.1%;
+    --muted-foreground: 0 0% 45.1%;
+    --accent: 0 0% 96.1%;
+    --accent-foreground: 0 0% 9%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 89.8%;
+    --input: 0 0% 89.8%;
+    --ring: 0 0% 3.9%;
+    --chart-1: 12 76% 61%;
+    --chart-2: 173 58% 39%;
+    --chart-3: 197 37% 24%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+    --radius: 0.5rem;
+  }
+  .dark {
+    /* Dark mode shadcn variables */
+    --background: 0 0% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 0 0% 9%;
+    --secondary: 0 0% 14.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 14.9%;
+    --muted-foreground: 0 0% 63.9%;
+    --accent: 0 0% 14.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 14.9%;
+    --input: 0 0% 14.9%;
+    --ring: 0 0% 83.1%;
+    --chart-1: 220 70% 50%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
+  }
+}
+
+@layer components {
+  .card-base {
+    @apply rounded-lg border bg-opacity-80 backdrop-blur-sm transition-all duration-200;
+    background-color: var(--card-bg);
+    border-color: var(--border-color);
+  }
+
+  .gradient-border {
+    @apply relative rounded-lg p-[1px] bg-gradient-to-r from-[var(--pulsar-cyan)] to-[var(--cosmic-dust)];
+  }
+
+  .button-base {
+    @apply px-4 py-2 rounded-md font-medium transition-all duration-200
+    disabled:opacity-50 disabled:cursor-not-allowed
+    focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[var(--space-bg-dark)];
+  }
+
+  .chat-message-user {
+    @apply bg-[var(--cosmic-dust)]/15 border-l-4;
+    border-color: var(--cosmic-dust);
+  }
+
+  .chat-message-assistant {
+    @apply bg-[var(--pulsar-cyan)]/10 border-l-4;
+    border-color: var(--pulsar-cyan);
+  }
+}
+
+/* Markdown formatting for chat messages */
+.markdown-content {
+  @apply break-words;
+  color: var(--stellar-white);
+  line-height: 1.6;
+}
+
+.markdown-content h1 {
+  @apply text-xl font-bold mb-4 mt-4;
+}
+
+.markdown-content h2 {
+  @apply text-lg font-bold mb-3 mt-4;
+}
+
+.markdown-content h3 {
+  @apply text-base font-bold mb-2 mt-3;
+}
+
+.markdown-content h4, .markdown-content h5, .markdown-content h6 {
+  @apply font-bold mb-2 mt-3;
+}
+
+.markdown-content p {
+  @apply mb-3;
+}
+
+.markdown-content ul, .markdown-content ol {
+  @apply pl-6 mb-3 mt-2;
+}
+
+.markdown-content ul {
+  @apply list-disc;
+}
+
+.markdown-content ol {
+  @apply list-decimal;
+}
+
+.markdown-content li {
+  @apply mb-2;
+  line-height: 1.5;
+}
+
+.markdown-content li + li {
+  @apply mt-2;
+}
+
+.markdown-content a {
+  @apply text-blue-300 hover:text-blue-200 underline;
+}
+
+.markdown-content pre {
+  @apply bg-gray-800/60 p-3 rounded-md overflow-x-auto mb-3 mt-2;
+}
+
+.markdown-content code {
+  @apply bg-gray-800/60 px-1.5 py-0.5 rounded-sm font-mono text-sm;
+}
+
+.markdown-content pre code {
+  @apply bg-transparent p-0 text-sm;
+}
+
+.markdown-content blockquote {
+  @apply border-l-4 border-gray-500 pl-4 py-2 italic mb-3 mt-2;
+}
+
+.markdown-content table {
+  @apply w-full border-collapse mb-3 mt-2;
+}
+
+.markdown-content th, .markdown-content td {
+  @apply border border-gray-600 px-3 py-2;
+}
+
+.markdown-content th {
+  @apply bg-gray-800/60;
+}
+
+.markdown-content hr {
+  @apply border-gray-600 my-4;
+}
+
+.markdown-content img {
+  @apply max-w-full h-auto rounded-md my-3;
+}
+
+/* Specific styling for message containers */
+.user-message .markdown-content {
+  @apply text-green-50;
+}
+
+.assistant-message .markdown-content {
+  @apply text-blue-50;
+}
+
+/* Custom scrollbar styling */
+/* For Webkit browsers (Chrome, Safari, etc.) */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: rgba(156, 163, 175, 0.5);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(156, 163, 175, 0.7);
+}
+
+/* Dark mode scrollbar */
+.dark ::-webkit-scrollbar-thumb {
+  background-color: rgba(75, 85, 99, 0.5);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(75, 85, 99, 0.7);
+}
+
+/* Firefox scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
+}
+
+.dark * {
+  scrollbar-color: rgba(75, 85, 99, 0.5) transparent;
+}
+
+/* Solar System Animation Styles - Add to globals.css */
+
+.solar-system {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100vh;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.star {
+  position: absolute;
+  background-color: #fff;
+  border-radius: 50%;
+  animation: twinkle 5s infinite alternate;
+}
+
+@keyframes twinkle {
+  0%, 100% { opacity: 0.2; }
+  50% { opacity: 1; }
+}
+
+#sun {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  background: radial-gradient(circle, #ff9900, #ff5500);
+  border-radius: 50%;
+  box-shadow: 0 0 30px #ff9900, 0 0 60px #ff5500;
+  left: 50%;
+  top: 25%;
+  transform: translate(-50%, -50%);
+  z-index: 1;
+}
+
+.planet {
+  position: absolute;
+  border-radius: 50%;
+  transform-origin: center;
+  left: 50%;
+  top: 50%;
+}
+
+.orbit {
+  position: absolute;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+@media (max-width: 768px) {
+  #sun {
+    width: 30px;
+    height: 30px;
+    top: 20%;
+  }
+}
+
+/* Saturn ring effect for the Saturn planet */
+#saturn::after {
+  content: '';
+  position: absolute;
+  width: 140%;
+  height: 6px;
+  background-color: rgba(255, 240, 200, 0.6);
+  border-radius: 50%;
+  top: 50%;
+  left: -20%;
+  transform: translateY(-50%) rotate(15deg);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* This will override the stellar-white variable for light mode */
+:root:not(.dark) .markdown-content,
+:root:not(.dark) .whitespace-pre-wrap,
+:root:not(.dark) [class*="chat-message"] {
+  color: #1A1A1A !important;
+}
+
+/* Fix for any other text that might be using the variable */
+:root:not(.dark) {
+  --stellar-white: #1A1A1A !important;
+}
+
+/* For the light mode, we should ensure all text elements have visible colors */
+:root:not(.dark) p,
+:root:not(.dark) span,
+:root:not(.dark) div,
+:root:not(.dark) h1,
+:root:not(.dark) h2,
+:root:not(.dark) h3,
+:root:not(.dark) h4,
+:root:not(.dark) h5,
+:root:not(.dark) h6,
+:root:not(.dark) li {
+  color: #1A1A1A;
+}
+
+/* Fix for chat messages specifically */
+:root:not(.dark) .user-message,
+:root:not(.dark) .assistant-message {
+  color: #1A1A1A !important;
+}
+
+/* Make sure scrollbar colors are appropriate for light mode */
+:root:not(.dark) ::-webkit-scrollbar-thumb {
+  background-color: rgba(156, 163, 175, 0.5);
+}
+
+/* Add these additional CSS rules to your globals.css file */
+
+/* Fix code block text color in light mode */
+:root:not(.dark) .markdown-content code,
+:root:not(.dark) .markdown-content pre,
+:root:not(.dark) .markdown-content pre code {
+  color: #F8F9FA !important; /* Keep code blocks with white text in light mode for better contrast */
+}
+
+/* Responsive typography for smaller screens */
+@media (max-width: 640px) {
+  .markdown-content h1 {
+    @apply text-lg font-bold mb-3 mt-3 !important;
+  }
+
+  .markdown-content h2 {
+    @apply text-base font-bold mb-2 mt-3 !important;
+  }
+
+  .markdown-content h3,
+  .markdown-content h4,
+  .markdown-content h5,
+  .markdown-content h6 {
+    @apply text-sm font-bold mb-1.5 mt-2 !important;
+  }
+
+  .markdown-content p {
+    @apply text-sm mb-2 !important;
+    line-height: 1.5 !important;
+  }
+
+  .markdown-content ul,
+  .markdown-content ol {
+    @apply pl-4 mb-2 mt-1.5 !important;
+  }
+
+  .markdown-content li {
+    @apply mb-1.5 text-sm !important;
+    line-height: 1.4 !important;
+  }
+
+  .markdown-content pre {
+    @apply p-2 mb-2 mt-1.5 !important;
+  }
+
+  .markdown-content code,
+  .markdown-content pre code {
+    @apply text-xs !important;
+    padding: 0.15rem 0.3rem !important;
+  }
+
+  .markdown-content pre code {
+    padding: 0 !important;
+  }
+
+  .markdown-content blockquote {
+    @apply pl-3 py-1.5 mb-2 mt-1.5 !important;
+  }
+
+  .markdown-content table {
+    @apply text-xs mb-2 mt-1.5 !important;
+  }
+
+  .markdown-content th,
+  .markdown-content td {
+    @apply px-2 py-1 !important;
+  }
+}
+
+/* Even more compact for very small screens */
+@media (max-width: 370px) {
+  .markdown-content h1 {
+    @apply text-base !important;
+  }
+
+  .markdown-content h2 {
+    @apply text-sm !important;
+  }
+
+  .markdown-content h3,
+  .markdown-content h4,
+  .markdown-content h5,
+  .markdown-content h6 {
+    @apply text-xs !important;
+  }
+
+  .markdown-content p,
+  .markdown-content li {
+    @apply text-xs !important;
+  }
+
+  /* Optimize spacing on very small screens */
+  .p-4 {
+    padding: 0.75rem !important;
+  }
+
+  .px-4 {
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+  }
+
+  .py-4 {
+    padding-top: 0.75rem !important;
+    padding-bottom: 0.75rem !important;
+  }
+
+  .space-x-4 > * + * {
+    margin-left: 0.75rem !important;
+  }
+
+  .space-y-4 > * + * {
+    margin-top: 0.75rem !important;
+  }
+
+  .gap-4 {
+    gap: 0.75rem !important;
+  }
+}
+
+/* Improve scrollbars on touch devices */
+@media (hover: none) {
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: rgba(156, 163, 175, 0.7);
+  }
+
+  .dark ::-webkit-scrollbar-thumb {
+    background-color: rgba(75, 85, 99, 0.7);
+  }
+}
+
+/* Fix for message bubbles padding in mobile */
+@media (max-width: 640px) {
+  .user-message,
+  .assistant-message {
+    @apply py-2 px-3 !important;
+  }
+
+  /* Ensure buttons and interactive elements have adequate touch targets */
+  button,
+  a,
+  [role="button"] {
+    min-height: 36px;
+    min-width: 36px;
+  }
+}
+
+/* Add bottom margin to the last item in chat containers */
+.markdown-content > *:last-child {
+  margin-bottom: 0 !important;
+}
+
+/* Fix for validate button text color */
+.validate-btn,
+.validate-btn span,
+.validate-btn svg,
+button[class*="bg-blue-"] span,
+button[class*="bg-blue-"] svg {
+  color: white !important;
+  fill: white !important;
+  stroke: white !important;
+}
+
+/* Ensure all elements inside blue buttons have white text */
+button[class*="bg-blue-"] * {
+  color: white !important;
+}
+
+/* Target specifically for theme toggle issues */
+:root:not(.dark) button[class*="bg-blue-"] span,
+:root:not(.dark) button[class*="bg-blue-"] div,
+:root:not(.dark) button[class*="bg-blue-"] svg {
+  color: white !important;
+  fill: white !important;
+  stroke: white !important;
+}
+
+:root:not(.dark) .chat-action-btn svg,
+:root:not(.dark) button[class*="bg-blue-"].chat-action-btn svg,
+:root:not(.dark) button:has(.message-icon) svg {
+  color: var(--cosmic-blue) !important;
+  fill: var(--cosmic-blue) !important;
+  stroke: var(--cosmic-blue) !important;
+}
+
+/* Alternative approach with more specific selector if the above doesn't work */
+:root:not(.dark) [class*="Chat"] button svg,
+:root:not(.dark) [class*="chat"] button svg,
+:root:not(.dark) button:has(svg[class*="Message"]) svg {
+  color: var(--cosmic-blue) !important;
+  fill: none !important;
+  stroke: var(--cosmic-blue) !important;
+}
+
+/* ======= ENHANCED ICON FIXES FOR DATAOBJECTINFO ======= */
+/* Add these rules at the end of your globals.css */
+
+/* Universal icon fixes - apply to all SVG icons in DataObjectInfo */
+:root:not(.dark) div[class*="border rounded-lg overflow-hidden flex flex-col"] svg {
+  color: #1E40AF !important;
+  stroke: #1E40AF !important;
+  fill: none !important;
+  opacity: 1 !important;
+}
+
+/* Force all button SVGs to have proper contrast in light mode */
+:root:not(.dark) div[class*="border rounded-lg overflow-hidden flex flex-col"] button svg {
+  color: #1E40AF !important;
+  stroke: #1E40AF !important;
+  opacity: 1 !important;
+}
+
+/* Fix for Lucide icons - they use a specific pattern */
+:root:not(.dark) div[class*="border rounded-lg overflow-hidden flex flex-col"] svg[stroke="currentColor"] {
+  stroke: #1E40AF !important;
+  color: #1E40AF !important;
+}
+
+/* Special case icons by type - using attribute selectors to avoid escape issues */
+:root:not(.dark) div[class*="border rounded-lg overflow-hidden flex flex-col"] [class*="w-4"][class*="h-4"] {
+  stroke: #1E40AF !important;
+  color: #1E40AF !important;
+}
+
+:root:not(.dark) div[class*="border rounded-lg overflow-hidden flex flex-col"] [class*="w-5"][class*="h-5"] {
+  stroke: #1E40AF !important;
+  color: #1E40AF !important;
+}
+
+/* For fractional sizes like 3.5, use attribute selectors instead of escape sequences */
+:root:not(.dark) div[class*="border rounded-lg overflow-hidden flex flex-col"] [class*="w-3.5"][class*="h-3.5"] {
+  stroke: #1E40AF !important;
+  color: #1E40AF !important;
+}
+
+/* Aggressive specific icon fixes by icon name */
+:root:not(.dark) div[class*="border rounded-lg overflow-hidden flex flex-col"] [class*="lucide-database"],
+:root:not(.dark) div[class*="border rounded-lg overflow-hidden flex flex-col"] [class*="lucide-info"],
+:root:not(.dark) div[class*="border rounded-lg overflow-hidden flex flex-col"] [class*="lucide-activity"],
+:root:not(.dark) div[class*="border rounded-lg overflow-hidden flex flex-col"] [class*="lucide-star"],
+:root:not(.dark) div[class*="border rounded-lg overflow-hidden flex flex-col"] [class*="lucide-chevron"] {
+  stroke: #1E40AF !important;
+  color: #1E40AF !important;
+}
+
+/* Special handling for status icons */
+:root:not(.dark) div[class*="border rounded-lg overflow-hidden flex flex-col"] [class*="lucide-alert-triangle"] {
+  stroke: #EF4444 !important;
+  color: #EF4444 !important;
+}
+
+:root:not(.dark) div[class*="border rounded-lg overflow-hidden flex flex-col"] [class*="lucide-check-circle"] {
+  stroke: #10B981 !important;
+  color: #10B981 !important;
+}
+
+:root:not(.dark) div[class*="border rounded-lg overflow-hidden flex flex-col"] [class*="lucide-loader"] {
+  stroke: #6366F1 !important;
+  color: #6366F1 !important;
+}
+
+/* Ultra-specific override for any remaining invisible icons */
+:root:not(.dark) div[class*="border rounded-lg overflow-hidden flex flex-col"] [class*="lucide"] {
+  stroke: currentColor !important;
+  stroke-width: 2 !important;
+  stroke-linecap: round !important;
+  stroke-linejoin: round !important;
+  fill: none !important;
+}
+
+/* Direct parent classes that may be causing issues */
+:root:not(.dark) div[class*="border rounded-lg overflow-hidden flex flex-col"] [class*="text-gray-400"] svg,
+:root:not(.dark) div[class*="border rounded-lg overflow-hidden flex flex-col"] [class*="text-gray-500"] svg {
+  stroke: #1E40AF !important;
+  color: #1E40AF !important;
+}
+
+/* Ensure full hierarchy is covered */
+:root:not(.dark) div[class*="border rounded-lg overflow-hidden flex flex-col"] div button svg,
+:root:not(.dark) div[class*="border rounded-lg overflow-hidden flex flex-col"] div span svg {
+  stroke: #1E40AF !important;
+  color: #1E40AF !important;
+}
+
+/* Target expanded sections specifically */
+:root:not(.dark) div[class*="border rounded-lg overflow-hidden flex flex-col"] div[class*="max-h-"] {
+  color: #000000 !important;
+}
+
+/* Target all text inside expanded sections */
+:root:not(.dark) div[class*="border rounded-lg overflow-hidden flex flex-col"] div[class*="max-h-"] p,
+:root:not(.dark) div[class*="border rounded-lg overflow-hidden flex flex-col"] div[class*="max-h-"] span,
+:root:not(.dark) div[class*="border rounded-lg overflow-hidden flex flex-col"] div[class*="max-h-"] div {
+  color: #000000 !important;
+}
+
+/* Target expansion status indicators more specifically */
+:root:not(.dark) div[class*="border rounded-lg overflow-hidden flex flex-col"] div[class*="rounded-md border max-h-"] {
+  color: #000000 !important;
+}
+
+/* Target specifc section types */
+:root:not(.dark) div[class*="border rounded-lg overflow-hidden flex flex-col"] div[class*="p-3 mt-1 rounded-md border max-h-"] p {
+  color: #000000 !important;
+}
+
+/* Target JSON data display */
+:root:not(.dark) div[class*="border rounded-lg overflow-hidden flex flex-col"] pre[class*="text-xs whitespace-pre-wrap break-all"] {
+  color: #000000 !important;
+}
+
+/* Target source summary specifically */
+:root:not(.dark) div[class*="border rounded-lg overflow-hidden flex flex-col"] div[class*="max-h-40"] p[class*="whitespace-pre-wrap"] {
+  color: #1F2937 !important;
+  font-weight: 500 !important;
+}
+
+/* Apply to specific text elements in expanded areas */
+:root:not(.dark) div[class*="border rounded-lg overflow-hidden flex flex-col"] div[class*="overflow-y-auto"] p,
+:root:not(.dark) div[class*="border rounded-lg overflow-hidden flex flex-col"] div[class*="overflow-y-auto"] span,
+:root:not(.dark) div[class*="border rounded-lg overflow-hidden flex flex-col"] div[class*="overflow-y-auto"] h3,
+:root:not(.dark) div[class*="border rounded-lg overflow-hidden flex flex-col"] div[class*="overflow-y-auto"] h4 {
+  color: #000000 !important;
+}
