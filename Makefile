@@ -11,7 +11,7 @@ PROFILE_FLAG := --profile $(shell grep -E '^MONGODB_MODE=' $(ENV_FILE) 2>/dev/nu
 # values from `.env` instead. Add new env vars here as they appear.
 LEAKY_VARS := \
 	OPENAI_API_KEY OPENAI_DEFAULT_MODEL \
-	MODEL_SERVER_URL \
+	MODEL_SERVER_URL PROJECTOR_URL PROJECTOR_PORT HF_REPO_ID \
 	MONGODB_URI MONGODB_DB MONGODB_MODE \
 	MONGODB_CORPUS_COLLECTION MONGODB_METADATA_COLLECTION \
 	NEXT_PUBLIC_API_URL NEXT_PUBLIC_MONGODB_URI NEXT_PUBLIC_MONGODB_DB \
@@ -24,7 +24,7 @@ ENV_PREFIX := env $(foreach v,$(LEAKY_VARS),-u $(v))
 .DEFAULT_GOAL := help
 
 .PHONY: help setup up down restart logs ps load-sample load-from-hf rebuild-from-csc \
-        service-dev webapp-dev model-server shell-service shell-webapp shell-mongo \
+        service-dev webapp-dev model-server projector shell-service shell-webapp shell-mongo \
         lint clean clean-data verify
 
 help: ## Show this help
@@ -49,14 +49,16 @@ $(ENV_FILE):
 # Stack lifecycle (docker compose)
 # ----------------------------------------------------------------------------
 
-up: $(ENV_FILE) ## Start the stack (mongo + service + webapp)
+up: $(ENV_FILE) ## Start the stack (mongo + projector + service + webapp)
 	@$(ENV_PREFIX) $(DC) $(PROFILE_FLAG) up -d --build
 	@echo ""
 	@echo "Stack starting. Endpoints:"
 	@WEBAPP_PORT=$$(grep -E '^WEBAPP_PORT=' $(ENV_FILE) | cut -d= -f2 | tr -d '"'); \
-		echo "  webapp : http://localhost:$${WEBAPP_PORT:-3000}"
-	@echo "  service: http://localhost:8000/docs"
-	@grep -q '^MONGODB_MODE=local' $(ENV_FILE) && echo "  mongo  : mongodb://localhost:27017" || true
+		echo "  webapp    : http://localhost:$${WEBAPP_PORT:-3000}"
+	@echo "  service   : http://localhost:8000/docs"
+	@PROJECTOR_PORT=$$(grep -E '^PROJECTOR_PORT=' $(ENV_FILE) | cut -d= -f2 | tr -d '"'); \
+		echo "  projector : http://localhost:$${PROJECTOR_PORT:-8001}/health"
+	@grep -q '^MONGODB_MODE=local' $(ENV_FILE) && echo "  mongo     : mongodb://localhost:27017" || true
 	@echo ""
 	@echo "Tail logs with: make logs"
 
@@ -121,6 +123,12 @@ webapp-dev: $(ENV_FILE) ## Run webapp on host (npm, hot reload)
 
 model-server: ## Print instructions for deploying model/server
 	@cat model/server/README.md | head -80
+
+projector: $(ENV_FILE) ## Run projector standalone (downloads weights from HF on first start)
+	@$(ENV_PREFIX) $(DC) $(PROFILE_FLAG) up -d --build projector
+	@PROJECTOR_PORT=$$(grep -E '^PROJECTOR_PORT=' $(ENV_FILE) | cut -d= -f2 | tr -d '"'); \
+		echo "Projector starting at http://localhost:$${PROJECTOR_PORT:-8001}/health"
+	@echo "First start downloads ~130 MB of weights from HF (cached afterwards)."
 
 # ----------------------------------------------------------------------------
 # Shells
