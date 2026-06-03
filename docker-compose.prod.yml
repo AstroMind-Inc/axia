@@ -1,0 +1,111 @@
+name: axia
+
+# Production overlay — extends docker-compose.yml with:
+#   - Caddy reverse proxy (auto-HTTPS + basic auth)
+#   - Autoheal (restarts unhealthy containers)
+#   - Log rotation on all containers
+#   - Internal-only ports (only 80/443 exposed)
+#
+# Usage:
+#   make prod-up          (or)
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile local up -d
+
+services:
+  # ---------------------------------------------------------------------------
+  # Caddy — reverse proxy, automatic HTTPS via Let's Encrypt, basic auth
+  # ---------------------------------------------------------------------------
+  caddy:
+    image: caddy:2-alpine
+    container_name: axia-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      webapp:
+        condition: service_started
+      service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ---------------------------------------------------------------------------
+  # Autoheal — restarts containers that fail their health checks
+  # ---------------------------------------------------------------------------
+  autoheal:
+    image: willfarrell/autoheal:latest
+    container_name: axia-autoheal
+    restart: unless-stopped
+    environment:
+      AUTOHEAL_CONTAINER_LABEL: all
+      AUTOHEAL_INTERVAL: 30
+      AUTOHEAL_START_PERIOD: 180
+      AUTOHEAL_DEFAULT_STOP_TIMEOUT: 10
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+  # ---------------------------------------------------------------------------
+  # Overrides — lock down ports, add log rotation
+  # ---------------------------------------------------------------------------
+  mongo:
+    ports: !override
+      - "127.0.0.1:27017:27017"
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  projector:
+    ports: !override
+      - "127.0.0.1:8001:8001"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  service:
+    ports: !override
+      - "127.0.0.1:8000:8000"
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  webapp:
+    ports: !override
+      - "127.0.0.1:3000:3000"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  caddy-data:
+    name: axia-caddy-data
+  caddy-config:
+    name: axia-caddy-config
