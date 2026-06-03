@@ -35,8 +35,9 @@ logger = setup_logger()
 async def startup_event() -> None:
     logger.info("Starting Axia service ...")
     logger.info(
-        "Configuration: MODEL_SERVER_URL=%s, OPENAI_API_KEY=%s, MONGODB_DB=%s",
+        "Configuration: MODEL_SERVER_URL=%s, PROJECTOR_URL=%s, OPENAI_API_KEY=%s, MONGODB_DB=%s",
         "set" if settings.model_server_configured else "unset (Event Analyst disabled)",
+        "set" if settings.projector_configured else "unset (falls back to MODEL_SERVER_URL)",
         "set" if settings.openai_api_key else "unset (GPT-5 agents will fail)",
         settings.mongodb_db,
     )
@@ -53,6 +54,8 @@ async def health():
     return {
         "status": "ok",
         "model_server_configured": settings.model_server_configured,
+        "projector_configured": settings.projector_configured,
+        "embedding_url": settings.embedding_url or "(none)",
         "openai_configured": bool(settings.openai_api_key),
         "mongodb_db": settings.mongodb_db,
     }

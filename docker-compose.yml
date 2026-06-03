@@ -43,6 +43,30 @@ services:
     restart: "no"
 
   # ---------------------------------------------------------------------------
+  # projector — CPU-only XrayProcessor + PCA/UMAP server
+  # ---------------------------------------------------------------------------
+  projector:
+    build:
+      context: ./model/projector
+      dockerfile: Dockerfile
+    container_name: axia-projector
+    restart: unless-stopped
+    ports:
+      - "${PROJECTOR_PORT:-8001}:8001"
+    environment:
+      HF_REPO_ID: ${HF_REPO_ID:-astromindinc/axia-qwen-xray-7b}
+      PROJECTOR_CACHE_DIR: /cache
+      HF_TOKEN: ${HF_TOKEN:-}
+    volumes:
+      - projector-cache:/cache
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8001/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 15
+      start_period: 120s
+
+  # ---------------------------------------------------------------------------
   # service — FastAPI multi-agent orchestrator
   # ---------------------------------------------------------------------------
   service:
@@ -59,16 +83,17 @@ services:
       MONGODB_CORPUS_COLLECTION: ${MONGODB_CORPUS_COLLECTION:-sources}
       MONGODB_METADATA_COLLECTION: ${MONGODB_METADATA_COLLECTION:-metadata_records}
       MODEL_SERVER_URL: ${MODEL_SERVER_URL:-}
+      PROJECTOR_URL: http://projector:8001
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_DEFAULT_MODEL: ${OPENAI_DEFAULT_MODEL:-gpt-5-mini}
       SERVICE_LOG_LEVEL: ${SERVICE_LOG_LEVEL:-info}
       SERVICE_DEBUG: ${SERVICE_DEBUG:-false}
     depends_on:
-      # On local Mongo, wait for the seed to finish.
-      # On external Mongo, this dependency is silently skipped (no container).
       mongo-init:
         condition: service_completed_successfully
         required: false
+      projector:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health',timeout=2).status==200 else 1)"]
       interval: 10s
@@ -96,6 +121,7 @@ services:
       # Server-side (used by API routes running in Node)
       SERVICE_URL: http://service:8000
       MODEL_SERVER_URL: ${MODEL_SERVER_URL:-}
+      PROJECTOR_URL: http://projector:8001
       MONGODB_URI: ${MONGODB_URI:-mongodb://mongo:27017}
       MONGODB_DB: ${MONGODB_DB:-axia}
       MONGODB_MODE: ${MONGODB_MODE:-local}
@@ -115,3 +141,5 @@ services:
 volumes:
   mongo-data:
     name: axia-mongo-data
+  projector-cache:
+    name: axia-projector-cache

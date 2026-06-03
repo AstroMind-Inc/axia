@@ -12,7 +12,15 @@ bad()  { printf "  \033[31m✗\033[0m %s\n" "$1"; fail=1; }
 echo "Axia stack verification"
 echo "----------------------------------------------------------------------"
 
-# 1. service /health
+# 1. projector /health
+echo "projector:"
+if curl -fsS "http://localhost:${PROJECTOR_PORT:-8001}/health" >/dev/null 2>&1; then
+    ok "GET /health on port ${PROJECTOR_PORT:-8001}"
+else
+    bad "projector not reachable on port ${PROJECTOR_PORT:-8001}"
+fi
+
+# 2. service /health
 echo "service:"
 if curl -fsS "http://localhost:${SERVICE_PORT:-8000}/health" >/dev/null 2>&1; then
     ok "GET /health"
@@ -25,7 +33,7 @@ else
     fi
 fi
 
-# 2. webapp
+# 3. webapp
 echo "webapp:"
 WEBAPP_PORT="${WEBAPP_PORT:-3000}"
 if curl -fsS "http://localhost:${WEBAPP_PORT}" >/dev/null 2>&1; then
@@ -34,7 +42,7 @@ else
     bad "webapp not reachable on port ${WEBAPP_PORT}"
 fi
 
-# 3. Mongo: count documents in sources collection
+# 4. Mongo: count documents in sources collection
 echo "mongo:"
 if [[ "${MONGODB_MODE:-local}" == "local" ]]; then
     COLL="${MONGODB_CORPUS_COLLECTION:-${MONGODB_SOURCES_COLLECTION:-sources}}"

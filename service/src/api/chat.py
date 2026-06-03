@@ -197,12 +197,12 @@ async def chat_stream(request: ChatRequest):
 
 @router.post("/embeddings", response_model=EmbeddingsResponse)
 async def generate_embeddings_route(request: EmbeddingsRequest):
-    """Project an event_list to (pca_64d, umap_2d) via the model server."""
+    """Project an event_list to (pca_64d, umap_2d) via the projector (or model server)."""
 
-    model_url = request.model_api_url or settings.model_server_url
+    model_url = request.model_api_url or settings.embedding_url
     if not model_url:
         return EmbeddingsResponse(
-            error="MODEL_SERVER_URL is not configured; embedding generation is disabled.",
+            error="No projector or model server is configured; embedding generation is disabled.",
             is_insufficient_window=False,
         )
 
