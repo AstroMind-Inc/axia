@@ -90,3 +90,6 @@ htmlcov/
 # Misc
 *.pkl
 !data/samples/*.json
+
+# Deployment scripts (kept local only)
+scripts/deploy-init.sh
