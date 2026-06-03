@@ -209,7 +209,7 @@ def main() -> int:
         sys.exit("ERROR: MONGODB_URI env var is not set.")
 
     cache_dir = _cache_dir_for(args.repo_id, args.cache_dir)
-    token = os.environ.get("HF_TOKEN")  # only needed for private repos
+    token = os.environ.get("HF_TOKEN") or None  # only needed for private repos
 
     download(args.repo_id, cache_dir, args.force_download, token)
     verify(cache_dir)

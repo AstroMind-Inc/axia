@@ -41,6 +41,16 @@ class Settings(BaseSettings):
         description="URL of the fine-tuned model server. If empty, Event Analyst is disabled.",
     )
 
+    # CPU projector server (for embeddings without the LLM) -------------------
+    projector_url: Optional[str] = Field(
+        None,
+        description=(
+            "URL of the lightweight XrayProcessor + PCA/UMAP projector. "
+            "Used for embedding generation (/project). Falls back to "
+            "model_server_url if not set."
+        ),
+    )
+
     # OpenAI (used by the GPT-5 agents) --------------------------------------
     openai_api_key: Optional[str] = Field(
         None, description="OpenAI API key for GPT-5 agents."
@@ -67,6 +77,19 @@ class Settings(BaseSettings):
     @property
     def model_server_configured(self) -> bool:
         return bool(self.model_server_url and self.model_server_url.strip())
+
+    @property
+    def projector_configured(self) -> bool:
+        return bool(self.projector_url and self.projector_url.strip())
+
+    @property
+    def embedding_url(self) -> str | None:
+        """Best available URL for /project (projector preferred, model server as fallback)."""
+        if self.projector_configured:
+            return self.projector_url
+        if self.model_server_configured:
+            return self.model_server_url
+        return None
 
 
 @lru_cache(maxsize=1)
