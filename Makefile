@@ -25,7 +25,8 @@ ENV_PREFIX := env $(foreach v,$(LEAKY_VARS),-u $(v))
 
 .PHONY: help setup up down restart logs ps load-sample load-from-hf rebuild-from-csc \
         service-dev webapp-dev model-server projector shell-service shell-webapp shell-mongo \
-        lint clean clean-data verify
+        lint clean clean-data verify \
+        prod-up prod-down prod-restart prod-logs
 
 help: ## Show this help
 	@echo "Axia — make targets"
@@ -160,3 +161,27 @@ clean: ## Stop stack and remove containers (keeps volumes)
 
 clean-data: ## DESTRUCTIVE: drop containers AND mongo volume
 	@$(ENV_PREFIX) $(DC) $(PROFILE_FLAG) down -v
+
+# ----------------------------------------------------------------------------
+# Production (Caddy + autoheal + systemd)
+# ----------------------------------------------------------------------------
+
+DC_PROD := $(DC) -f docker-compose.yml -f docker-compose.prod.yml $(PROFILE_FLAG)
+
+prod-up: $(ENV_FILE) ## Start production stack (Caddy HTTPS + autoheal + all services)
+	@$(ENV_PREFIX) $(DC_PROD) up -d --build
+	@DOMAIN=$$(grep -E '^DOMAIN=' $(ENV_FILE) | cut -d= -f2 | tr -d '"'); \
+		echo ""; \
+		echo "Production stack starting."; \
+		echo "  URL: https://$${DOMAIN:-localhost}"; \
+		echo ""; \
+		echo "Autoheal is monitoring all containers."; \
+		echo "Tail logs with: make prod-logs"
+
+prod-down: ## Stop the production stack
+	@$(ENV_PREFIX) $(DC_PROD) down
+
+prod-restart: prod-down prod-up ## Restart the production stack
+
+prod-logs: ## Tail production logs
+	@$(ENV_PREFIX) $(DC_PROD) logs -f --tail=100
