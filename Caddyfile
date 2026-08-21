@@ -1,9 +1,8 @@
 {$DOMAIN:localhost} {
+	# FastAPI is reachable from the webapp over the docker network
+	# (SERVICE_URL=http://service:8000). Do not proxy it publicly — that
+	# would bypass Google auth on the Next.js API routes.
 	reverse_proxy webapp:3000
-
-	handle_path /api/service/* {
-		reverse_proxy service:8000
-	}
 
 	encode gzip zstd
 

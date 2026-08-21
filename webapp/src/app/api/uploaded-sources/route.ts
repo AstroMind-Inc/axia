@@ -1,18 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToMongoDB } from '@/app/lib/mongodb';
+import { requireUserId } from '@/app/lib/authz';
 
 const COLLECTION_NAME = 'user_uploaded_sources';
 
-// GET - Load all uploaded sources
+// GET - Load uploaded sources for the signed-in user only
 export async function GET() {
   try {
+    const authz = await requireUserId();
+    if ('error' in authz) return authz.error;
+
     const { appDb } = await connectToMongoDB();
     const collection = appDb.collection(COLLECTION_NAME);
 
-    // Find all uploaded datasets - but only project necessary fields for metadata
-    // Don't load full embedded objects array immediately
     const uploadedDatasets = await collection
-      .find({})
+      .find({ user_id: authz.userId })
       .project({
         _id: 1,
         prefix: 1,
@@ -27,6 +29,7 @@ export async function GET() {
     // Use aggregation to efficiently extract all uploaded objects
     // User-uploaded data is typically small (hundreds, not thousands), so no pagination needed
     const objectsAggregation = await collection.aggregate([
+      { $match: { user_id: authz.userId } },
       { $unwind: '$objects' },
       { $replaceRoot: { newRoot: '$objects' } }
     ]).toArray();
@@ -58,6 +61,9 @@ export async function GET() {
 // POST - Save new uploaded data
 export async function POST(request: NextRequest) {
   try {
+    const authz = await requireUserId();
+    if ('error' in authz) return authz.error;
+
     const body = await request.json();
     const { objects, prefix, model_api_url, is_pruned } = body;
 
@@ -75,7 +81,7 @@ export async function POST(request: NextRequest) {
     const collection = appDb.collection(COLLECTION_NAME);
 
     // Check if prefix already exists
-    const existingDataset = await collection.findOne({ prefix });
+    const existingDataset = await collection.findOne({ prefix, user_id: authz.userId });
     
     if (existingDataset) {
       return NextResponse.json(
@@ -245,6 +251,7 @@ export async function POST(request: NextRequest) {
 
     // Create the dataset document with processed objects
     const datasetDocument = {
+      user_id: authz.userId,
       prefix,
       objects: processedObjects,
       uploadDate: new Date(),
@@ -283,6 +290,9 @@ export async function POST(request: NextRequest) {
 // DELETE - Remove uploaded dataset by prefix
 export async function DELETE(request: NextRequest) {
   try {
+    const authz = await requireUserId();
+    if ('error' in authz) return authz.error;
+
     const { searchParams } = new URL(request.url);
     const prefix = searchParams.get('prefix');
 
@@ -300,7 +310,7 @@ export async function DELETE(request: NextRequest) {
     const collection = appDb.collection(COLLECTION_NAME);
 
     // Delete the dataset with the specified prefix
-    const result = await collection.deleteOne({ prefix });
+    const result = await collection.deleteOne({ prefix, user_id: authz.userId });
 
     if (result.deletedCount === 0) {
       return NextResponse.json(

@@ -185,7 +185,10 @@ const ChatConfig = forwardRef<ChatConfigHandle, Record<string, never>>((_, ref) 
                 body: JSON.stringify({
                   collection_name: state.selectedDataset.collection_name,
                   vector: selectedFromReload.pca_64d,
-                  limit: 10
+                  limit: 10,
+                  exclude_id: selectedFromReload._id,
+                  exclude_obsid: selectedFromReload.obsid,
+                  exclude_source_name: selectedFromReload.source_name,
                 })
               });
               if (resp.ok) {
