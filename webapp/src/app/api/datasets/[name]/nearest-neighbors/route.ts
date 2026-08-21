@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToMongoDB, MONGODB_MODE } from '@/app/lib/mongodb';
 import { cosine, createTopK } from '@/app/lib/vector-search';
+import { canAccessCollection, requireUserId } from '@/app/lib/authz';
+import { excludeSelfNeighbors } from '@/app/lib/neighbors';
 
 interface RouteParams {
   params: Promise<{ name: string }>;
@@ -44,6 +46,9 @@ const SCAN_PROJECTION = {
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
+    const authz = await requireUserId();
+    if ('error' in authz) return authz.error;
+
     const resolvedParams = await params;
     const { searchParams } = new URL(request.url);
     const objectId = searchParams.get('objectId');
@@ -54,6 +59,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     const fileName = resolvedParams.name;
     const { db } = await connectToMongoDB();
+    if (!(await canAccessCollection(db, fileName, authz.userId))) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
     const coll = db.collection(fileName);
 
     let selectedObject: any = null;
@@ -101,9 +109,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         { $project: { ...PROJECTION, score: { $meta: 'vectorSearchScore' } } },
       ];
       const neighbors = await coll.aggregate(pipeline).toArray();
-      const filtered = neighbors
-        .filter((n) => n._id.toString() !== selectedObject._id.toString())
-        .slice(0, 10);
+      const filtered = excludeSelfNeighbors(neighbors, selectedObject).slice(0, 10);
       return NextResponse.json({ neighbors: filtered, totalFound: filtered.length });
     }
 

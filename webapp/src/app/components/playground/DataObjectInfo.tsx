@@ -313,10 +313,13 @@ export default function DataObjectInfo({ object, datasetName }: DataObjectInfoPr
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                collection_name: state.selectedDataset.collection_name,
-                vector: object.pca_64d,
-                limit: 10
-              })
+              collection_name: state.selectedDataset.collection_name,
+              vector: object.pca_64d,
+              limit: 10,
+              exclude_id: object._id,
+              exclude_obsid: object.obsid,
+              exclude_source_name: object.source_name,
+            })
             });
 
             if (!resp.ok) {

@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { ThemeToggle } from "@/app/components/ui/theme-toggle";
 import { useSettings } from "@/app/context/SettingsContext";
+import UserMenu from "@/app/components/navigation/UserMenu";
 
 const iconComponents = {
   Rocket,
@@ -151,7 +152,7 @@ export default function Navbar() {
 
           {/* Navigation items left-aligned */}
           <div className="flex items-center space-x-1 lg:space-x-4">
-            {navItems.map((item) => {
+            {pathname !== "/login" && navItems.map((item) => {
               const isActive = pathname === item.href;
               return (
                 <Link
@@ -181,8 +182,8 @@ export default function Navbar() {
             })}
           </div>
 
-          {/* Theme toggle on the right for desktop */}
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-3">
+            <UserMenu theme={theme} />
             <ThemeToggle />
           </div>
         </div>
@@ -222,8 +223,8 @@ export default function Navbar() {
               </Link>
             </div>
 
-            {/* Theme toggle on the right for mobile */}
-            <div className="flex items-center">
+            <div className="flex items-center gap-2">
+              <UserMenu theme={theme} />
               <ThemeToggle />
             </div>
           </div>
@@ -242,7 +243,7 @@ export default function Navbar() {
               ? "bg-[#0D0C22] border-gray-800/30"
               : "bg-white border-gray-200/30"
           )}>
-            {navItems.map((item) => {
+            {pathname !== "/login" && navItems.map((item) => {
               const isActive = pathname === item.href;
               return (
                 <Link

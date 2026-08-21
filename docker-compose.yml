@@ -134,6 +134,11 @@ services:
       NEXT_PUBLIC_MONGODB_DB: ${NEXT_PUBLIC_MONGODB_DB:-axia}
       NEXT_PUBLIC_MONGODB_MODE: ${NEXT_PUBLIC_MONGODB_MODE:-local}
       NEXT_PUBLIC_DEBUG: ${NEXT_PUBLIC_DEBUG:-false}
+      AUTH_SECRET: ${AUTH_SECRET:-}
+      AUTH_GOOGLE_ID: ${AUTH_GOOGLE_ID:-}
+      AUTH_GOOGLE_SECRET: ${AUTH_GOOGLE_SECRET:-}
+      AUTH_URL: ${AUTH_URL:-http://localhost:3000}
+      AUTH_TRUST_HOST: ${AUTH_TRUST_HOST:-true}
     depends_on:
       service:
         condition: service_healthy

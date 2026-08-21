@@ -3,8 +3,7 @@ import { ChatThread, ChatMessage, ThreadWithMessages, MessageFeedback, FeedbackS
 
 // Chat Thread Actions
 export async function createChatThread(
-  title: string, 
-  userId: string = 'default_user',
+  title: string,
   selectedObject?: {
     data_obj_id: string;
     dataset_name: string;
@@ -18,7 +17,7 @@ export async function createChatThread(
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ title, user_id: userId, selected_object: selectedObject }),
+    body: JSON.stringify({ title, selected_object: selectedObject }),
   });
 
   if (!response.ok) {

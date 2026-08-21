@@ -7,9 +7,13 @@ import {
   SOURCES_COLLECTION,
   METADATA_COLLECTION,
 } from '@/app/lib/mongodb';
+import { requireUserId } from '@/app/lib/authz';
 
 export async function GET() {
   try {
+    const authz = await requireUserId();
+    if ('error' in authz) return authz.error;
+
     const { db } = await connectToMongoDB();
 
     // Always advertise the configured sources collection.
@@ -39,7 +43,7 @@ export async function GET() {
     try {
       const extra = await db
         .collection(METADATA_COLLECTION)
-        .find({})
+        .find({ user_id: authz.userId })
         .project({
           _id: 1,
           file_name: 1,

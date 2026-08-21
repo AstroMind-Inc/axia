@@ -62,6 +62,24 @@ if (!global._mongoClientPromise) {
 
 const clientPromise: Promise<MongoClient> = global._mongoClientPromise as Promise<MongoClient>;
 
+let userIndexesReady = false;
+
+async function ensureUserDataIndexes(db: Db): Promise<void> {
+  if (userIndexesReady) return;
+  try {
+    await Promise.all([
+      db.collection("chat_threads").createIndex({ user_id: 1, status: 1, updated_at: -1 }),
+      db.collection("user_uploaded_sources").createIndex({ user_id: 1, prefix: 1 }),
+      db.collection("user_settings").createIndex({ user_id: 1 }),
+      db.collection("chat_message_feedbacks").createIndex({ user_id: 1, message_id: 1 }),
+      db.collection("metadata_records").createIndex({ user_id: 1, collection_name: 1 }),
+    ]);
+    userIndexesReady = true;
+  } catch (error) {
+    console.error("Failed to ensure user-data indexes:", error);
+  }
+}
+
 export interface AxiaDbHandles {
   db: Db;
   sources: ReturnType<Db['collection']>;
@@ -75,6 +93,7 @@ export interface AxiaDbHandles {
 export async function connectToMongoDB(): Promise<AxiaDbHandles> {
   const client = await clientPromise;
   const db = client.db(MONGODB_DB);
+  await ensureUserDataIndexes(db);
   return {
     db,
     sources: db.collection(SOURCES_COLLECTION),
