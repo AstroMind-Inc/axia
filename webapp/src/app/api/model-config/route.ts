@@ -5,6 +5,7 @@
 // Database entries always take precedence over the env-derived defaults.
 import { NextResponse } from 'next/server';
 import { connectToMongoDB } from '@/app/lib/mongodb';
+import { requireUserId } from '@/app/lib/authz';
 
 const COLLECTION = 'model_config';
 const DEFAULT_MODEL_IDS = ['astromind-multi-agent', 'astromind-openai'];
@@ -21,6 +22,9 @@ function envDefaults() {
 
 export async function GET() {
   try {
+    const authz = await requireUserId();
+    if ('error' in authz) return authz.error;
+
     const { db } = await connectToMongoDB();
     const stored = await db.collection(COLLECTION).find({}).toArray();
 
@@ -51,6 +55,9 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const authz = await requireUserId();
+    if ('error' in authz) return authz.error;
+
     const { modelId, apiUrl } = await request.json();
 
     if (!modelId || typeof apiUrl !== 'string') {
