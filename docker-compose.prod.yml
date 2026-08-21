@@ -98,6 +98,9 @@ services:
   webapp:
     ports: !override
       - "127.0.0.1:3000:3000"
+    environment:
+      AUTH_TRUST_HOST: "true"
+      AUTH_URL: ${AUTH_URL:-https://${DOMAIN:-localhost}}
     logging:
       driver: json-file
       options:

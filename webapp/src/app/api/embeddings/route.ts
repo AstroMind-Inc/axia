@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server';
 import { getServiceUrl } from '@/app/lib/service-url';
+import { requireUserId } from '@/app/lib/authz';
 
 export async function POST(request: Request) {
   try {
+    const authz = await requireUserId();
+    if ('error' in authz) return authz.error;
+
     console.log('🔥 Embeddings API called');
     const body = await request.json();
     const { event_list, model_api_url, is_pruned } = body;

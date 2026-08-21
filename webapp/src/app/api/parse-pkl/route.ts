@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { spawn } from 'child_process';
+import { requireUserId } from '@/app/lib/authz';
 
 // Python script as a string - this will be passed to Python via stdin
 const PYTHON_SCRIPT = `
@@ -73,6 +74,9 @@ print(json.dumps(result, cls=NumpyEncoder))
 
 export async function POST(request: NextRequest) {
   try {
+    const authz = await requireUserId();
+    if ('error' in authz) return authz.error;
+
     // Parse form data
     const formData = await request.formData();
     const file = formData.get('file') as File;
