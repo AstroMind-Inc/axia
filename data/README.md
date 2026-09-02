@@ -20,7 +20,9 @@ data/
 │   ├── compute_embeddings.py        # POST event_list -> model server /project; promotes
 │   │                                #   the raw event_list to `original_event_list` and
 │   │                                #   stores the pruned one as `event_list`
-│   ├── build_qna_dataset.py         # generate Q&A pairs from catalog metadata
+│   ├── build_qna_dataset.py         # synthesise NEW Q&A pairs from catalog metadata
+│   ├── dump_qna.py                  # dump the REAL training Q&A corpus from Atlas
+│   │                                #   -> data/full_corpus/qna/qna.jsonl.gz
 │   ├── load_into_mongo.py           # write the merged corpus into MongoDB (local or Atlas)
 │   ├── run_full_corpus.py           # end-to-end driver used by `make rebuild-from-csc`
 │   └── sample_csc_index.json        # the (obsid, source_name) list used in the paper
@@ -103,6 +105,26 @@ If `MONGODB_MODE=external` in your `.env`, the Makefile passes `--atlas` to
 the script and the Atlas vector-search index is created automatically after
 the load.
 
+### Training Q&A corpus (separate file)
+
+The Q&A the model was fine-tuned on lives in `data/qna.jsonl.gz` (~220 MB)
+in the same HF repo, not inside `corpus.jsonl.gz`. It is ~77% of the corpus
+collection by size and only matters if you are re-training, so it is opt-in
+and the base corpus download is unaffected:
+
+```bash
+make load-from-hf-qna                                       # corpus + Q&A
+python data/ingest/load_from_huggingface.py --with-qna      # equivalent
+```
+
+One record per `(obsid, source_name)`, carrying `qna` (single-turn pairs)
+and `extended_qna` (multi-turn chains). Join it onto the corpus on that
+pair. It is not written into MongoDB — nothing in the running stack uses it.
+
+> `build_qna_dataset.py` is a **different thing**: it synthesises four
+> templated pairs per source for people bringing their own data. It does not
+> reproduce the published corpus.
+
 ## Rebuilding the full corpus
 
 ```bash
@@ -151,6 +173,15 @@ end users will pull it via the (forthcoming) `load_from_huggingface.py`.
 MONGODB_URI="mongodb+srv://..." \
     python data/ingest/dump_full_corpus.py
 python data/ingest/merge_dump.py
+```
+
+The Q&A corpus is dumped separately (it is stripped from the dump above
+unless `--include-qna` is passed, and we publish it as its own file):
+
+```bash
+MONGODB_URI="mongodb+srv://..." make dump-qna    # -> data/full_corpus/qna/
+HF_TOKEN=... make push-qna DRY=1                 # preview the upload
+HF_TOKEN=... make push-qna                       # upload just qna.jsonl.gz
 ```
 
 Default outputs:
