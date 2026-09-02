@@ -57,6 +57,7 @@ except ImportError:
 
 DEFAULT_REPO_ID = "astromindinc/axia-csc-corpus"
 DEFAULT_INPUT_DIR = Path(__file__).resolve().parents[1] / "full_corpus" / "merged"
+DEFAULT_QNA_DIR = Path(__file__).resolve().parents[1] / "full_corpus" / "qna"
 DEFAULT_LICENSE = "cc-by-4.0"
 
 
@@ -65,7 +66,23 @@ DEFAULT_LICENSE = "cc-by-4.0"
 # ---------------------------------------------------------------------------
 
 def _peek_corpus_stats(corpus_path: Path) -> dict:
-    """Cheap one-pass stats over the merged corpus."""
+    """Cheap one-pass stats over the merged corpus.
+
+    Decompressing ~875 MB takes a couple of minutes, and the dataset card is
+    typically rendered twice (a --dry-run then the real push), so the result is
+    cached next to the corpus and reused while the corpus file is unchanged.
+    """
+    cache_path = corpus_path.with_suffix(".stats.json")
+    corpus_mtime = corpus_path.stat().st_mtime
+    if cache_path.exists():
+        try:
+            cached = json.loads(cache_path.read_text())
+            if cached.get("_corpus_mtime") == corpus_mtime:
+                print(f"  (reusing cached stats from {cache_path.name})")
+                return cached
+        except (json.JSONDecodeError, OSError):
+            pass
+
     n = 0
     n_with_ra = 0
     n_with_pca = 0
@@ -89,14 +106,20 @@ def _peek_corpus_stats(corpus_path: Path) -> dict:
                 n_with_original += 1
             cat = d.get("source_type_category") or "?"
             cat_counts[cat] = cat_counts.get(cat, 0) + 1
-    return {
+    result = {
         "n": n,
         "n_with_ra": n_with_ra,
         "n_with_pca": n_with_pca,
         "n_with_original": n_with_original,
         "cat_counts": dict(sorted(cat_counts.items(), key=lambda kv: -kv[1])),
         "first_doc_keys": sorted(first_doc.keys()) if first_doc else [],
+        "_corpus_mtime": corpus_mtime,
     }
+    try:
+        cache_path.write_text(json.dumps(result))
+    except OSError:
+        pass
+    return result
 
 
 def _build_readme(
@@ -104,6 +127,7 @@ def _build_readme(
     license_id: str,
     corpus_stats: dict,
     manifest: dict,
+    qna_manifest: dict | None = None,
 ) -> str:
     cat_lines = []
     for cat, count in corpus_stats["cat_counts"].items():
@@ -143,6 +167,61 @@ def _build_readme(
         | `match_type` | string | CSC master-source match type |
         | `significance` | float | CSC source significance |
     """).strip()
+
+    if qna_manifest:
+        qc = qna_manifest.get("counts", {})
+        qf = (qna_manifest.get("files") or {}).get("qna", {})
+        qna_section = textwrap.dedent(f"""\
+            ## Training Q&A corpus (`data/qna.jsonl.gz`)
+
+            The Q&A pairs the Axia model was fine-tuned on are shipped as a
+            **separate file** so that consumers who only want the source corpus
+            do not pay for the extra {qf.get('compressed_bytes', 0)/1e6:.0f} MB.
+
+            - `{qf.get('n_docs', 0):,}` records, one per `(obsid, source_name)`
+            - `{qc.get('qna_items', 0):,}` Q&A items in the `qna` field
+            - `{qc.get('extended_qna_chains', 0):,}` multi-turn chains in `extended_qna`
+
+            Each line looks like:
+
+            ```jsonc
+            {{
+              "obsid": 12345,
+              "source_name": "2CXO J123456.7+001122",
+              "qna": [
+                {{"question": "...", "answer": "...", "category": "SpectralModel"}},
+                ...
+              ],
+              "extended_qna": [ [ {{"question": "...", "answer": "..."}}, ... ], ... ]
+            }}
+            ```
+
+            `qna` / `extended_qna` are omitted when empty. Join onto
+            `data/corpus.jsonl.gz` on the `(obsid, source_name)` pair:
+
+            ```python
+            import gzip, json
+
+            qna = {{}}
+            with gzip.open("data/qna.jsonl.gz", "rt") as f:
+                for line in f:
+                    d = json.loads(line)
+                    qna[(d["obsid"], d["source_name"])] = d
+
+            with gzip.open("data/corpus.jsonl.gz", "rt") as f:
+                for line in f:
+                    src = json.loads(line)
+                    src.update(qna.get((src["obsid"], src["source_name"]), {{}}))
+                    # src now carries event_list + pca_64d + qna
+            ```
+
+            `model/training/train.py` in the
+            [Axia repo](https://github.com/astromindinc/axia) consumes this
+            merged shape directly.
+
+            """)
+    else:
+        qna_section = ""
 
     source_cluster = (
         manifest.get("merged_from_manifest", {}).get("source", {}).get("cluster")
@@ -234,9 +313,10 @@ fine-tuned model (DeepSeek-R1-Distill-Qwen-7B + XrayProcessor, LoRA r=8).
 Source cluster of this dump: `{source_cluster}`.
 Produced: `{produced_at}`.
 
-## Auxiliary files in this repo
+{qna_section}## Auxiliary files in this repo
 
 - `data/corpus.jsonl.gz` — the main file. One JSON document per line.
+- `data/qna.jsonl.gz` — the training Q&A corpus, joined on `(obsid, source_name)`.
 - `data/metadata_records.json` — small dataset registry used by the Axia
   webapp's `/api/datasets` endpoint.
 - `data/atlas_indexes/pca_64_vector_search.json` — MongoDB Atlas Vector
@@ -296,13 +376,45 @@ def main() -> int:
         default=None,
         help="Commit message for the upload (default: auto-generated).",
     )
+    p.add_argument("--qna-dir", type=Path, default=DEFAULT_QNA_DIR,
+                   help=f"Directory holding qna.jsonl.gz from dump_qna.py (default: {DEFAULT_QNA_DIR}).")
+    p.add_argument("--include-qna", action="store_true",
+                   help="Also upload data/qna.jsonl.gz and document it in the dataset card.")
+    p.add_argument("--qna-only", action="store_true",
+                   help="Upload ONLY qna.jsonl.gz + the refreshed README (implies --include-qna). "
+                        "Leaves the already-published corpus untouched.")
     p.add_argument("--dry-run", action="store_true", help="Print plan + README, do not upload.")
     p.add_argument("--force", action="store_true", help="Re-upload all files even if unchanged.")
     args = p.parse_args()
 
+    if args.qna_only:
+        args.include_qna = True
+
+    # Prefer an explicit HF_TOKEN, but fall back to a cached `hf auth login`
+    # session so the token never has to be pasted into a shell command.
     token = os.environ.get("HF_TOKEN")
+    if not token:
+        try:
+            from huggingface_hub import get_token
+            token = get_token()
+        except Exception:
+            token = None
     if not token and not args.dry_run:
-        sys.exit("ERROR: HF_TOKEN env var is not set (and --dry-run is off).")
+        sys.exit(
+            "ERROR: no Hugging Face credentials found.\n"
+            "  Either run `hf auth login` (recommended), or set HF_TOKEN to a "
+            "write-scoped token for the target repo."
+        )
+
+    qna_path = args.qna_dir / "qna.jsonl.gz"
+    qna_manifest = None
+    if args.include_qna:
+        if not qna_path.exists():
+            sys.exit(f"ERROR: {qna_path} missing. Run data/ingest/dump_qna.py first.")
+        qna_manifest_path = args.qna_dir / "manifest.json"
+        if not qna_manifest_path.exists():
+            sys.exit(f"ERROR: {qna_manifest_path} missing (written by dump_qna.py).")
+        qna_manifest = json.loads(qna_manifest_path.read_text())
 
     # Force the legacy LFS multipart upload path. The newer xet protocol has
     # been observed to hang at zero bytes for medium-large files (>100 MB) on
@@ -331,7 +443,7 @@ def main() -> int:
         f"  | original_event_list: {stats['n_with_original']:,}"
     )
 
-    readme = _build_readme(args.repo_id, args.license, stats, manifest)
+    readme = _build_readme(args.repo_id, args.license, stats, manifest, qna_manifest)
 
     # Plan the file uploads. Repo layout:
     #   README.md
@@ -339,14 +451,19 @@ def main() -> int:
     #   data/corpus.jsonl.gz
     #   data/metadata_records.json
     #   data/atlas_indexes/pca_64_vector_search.json
-    uploads: list[tuple[Path, str]] = [
-        (corpus_path, "data/corpus.jsonl.gz"),
-        (manifest_path, "manifest.json"),
-    ]
-    if meta_path.exists():
-        uploads.append((meta_path, "data/metadata_records.json"))
-    if idx_path.exists():
-        uploads.append((idx_path, "data/atlas_indexes/pca_64_vector_search.json"))
+    uploads: list[tuple[Path, str]] = []
+    if not args.qna_only:
+        uploads += [
+            (corpus_path, "data/corpus.jsonl.gz"),
+            (manifest_path, "manifest.json"),
+        ]
+        if meta_path.exists():
+            uploads.append((meta_path, "data/metadata_records.json"))
+        if idx_path.exists():
+            uploads.append((idx_path, "data/atlas_indexes/pca_64_vector_search.json"))
+    if args.include_qna:
+        uploads.append((qna_path, "data/qna.jsonl.gz"))
+        uploads.append((args.qna_dir / "manifest.json", "qna_manifest.json"))
 
     print(f"\nTarget repo: {args.repo_id} ({'private' if args.private else 'public'})")
     print(f"License:     {args.license}")

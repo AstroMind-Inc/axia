@@ -23,7 +23,7 @@ ENV_PREFIX := env $(foreach v,$(LEAKY_VARS),-u $(v))
 
 .DEFAULT_GOAL := help
 
-.PHONY: help setup up down restart logs ps load-sample load-from-hf rebuild-from-csc \
+.PHONY: help setup up down restart logs ps load-sample load-from-hf load-from-hf-qna dump-qna push-qna rebuild-from-csc \
         service-dev webapp-dev model-server projector shell-service shell-webapp shell-mongo \
         lint clean clean-data verify \
         prod-up prod-down prod-restart prod-logs
@@ -107,6 +107,32 @@ load-from-hf: $(ENV_FILE) ## Download corpus from Hugging Face -> tmp dir -> Mon
 		python data/ingest/load_from_huggingface.py \
 			--repo-id "$(DATASET)" \
 			--drop $$ATLAS_FLAG
+
+load-from-hf-qna: $(ENV_FILE) ## Same as load-from-hf, but also fetch the training Q&A corpus (~220 MB)
+	@MODE=$$(grep -E '^MONGODB_MODE=' $(ENV_FILE) | cut -d= -f2 | tr -d '"'); \
+	if [ "$$MODE" = "local" ]; then ATLAS_FLAG=""; else ATLAS_FLAG="--atlas"; fi; \
+	echo "Loading $(DATASET) (with Q&A) into MongoDB ($$MODE) ..."; \
+	$(ENV_PREFIX) $(DC) $(PROFILE_FLAG) run --rm \
+		-v $$(pwd)/data:/app/data \
+		service \
+		python data/ingest/load_from_huggingface.py \
+			--repo-id "$(DATASET)" \
+			--with-qna \
+			--drop $$ATLAS_FLAG
+
+# --- Publishing (paper authors only) -----------------------------------------
+
+dump-qna: ## Dump the training Q&A corpus from Atlas -> data/full_corpus/qna/ (needs MONGODB_URI)
+	@if [ -z "$$MONGODB_URI" ]; then \
+		echo "MONGODB_URI must be set to the source Atlas cluster. Aborting."; \
+		exit 1; \
+	fi
+	python data/ingest/dump_qna.py --overwrite
+
+push-qna: ## Upload ONLY data/qna.jsonl.gz to Hugging Face. Needs `hf auth login` or HF_TOKEN. Add DRY=1 to preview.
+	python data/ingest/push_to_huggingface.py \
+		--repo-id "$(DATASET)" \
+		--qna-only $${DRY:+--dry-run}
 
 # ----------------------------------------------------------------------------
 # Dev (host-side)

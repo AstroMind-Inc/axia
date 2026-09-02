@@ -23,6 +23,9 @@ Usage:
     # Pull a different repo:
     python data/ingest/load_from_huggingface.py --repo-id myorg/my-fork
 
+    # Also fetch the training Q&A corpus (~220 MB, only needed to re-train):
+    python data/ingest/load_from_huggingface.py --with-qna
+
 Required env:
     MONGODB_URI                   (required)
 
@@ -37,6 +40,7 @@ Optional env / flags:
     --drop                        drop target collections before insert (recommended on first run)
     --atlas                       also create the pca_64_vector_search Atlas index
     --force-download              delete the cache dir before downloading
+    --with-qna                    also download data/qna.jsonl.gz (training Q&A corpus)
 """
 
 from __future__ import annotations
@@ -67,6 +71,13 @@ EXPECTED_FILES = [
     "data/metadata_records.json",
     "manifest.json",
 ]
+
+# The training Q&A corpus is published as a separate file so that consumers who
+# only want the source corpus do not pay for the extra ~220 MB. It is fetched
+# only when --with-qna is passed, and is deliberately NOT part of
+# EXPECTED_FILES: adding it there would invalidate every existing local cache.
+QNA_FILE = "data/qna.jsonl.gz"
+QNA_MANIFEST = "qna_manifest.json"
 
 
 # ---------------------------------------------------------------------------
@@ -118,20 +129,26 @@ def _has_complete_cache(cache_dir: Path) -> bool:
 # Main flow
 # ---------------------------------------------------------------------------
 
-def download(repo_id: str, cache_dir: Path, force: bool, token: str | None) -> Path:
+def download(repo_id: str, cache_dir: Path, force: bool, token: str | None,
+             with_qna: bool = False) -> Path:
     """Fetch the dataset repo into cache_dir. Returns the local repo root path."""
     if cache_dir.exists() and force:
         print(f"[load-from-hf] --force-download: removing {cache_dir}")
         shutil.rmtree(cache_dir)
 
-    if _has_complete_cache(cache_dir):
+    qna_needed = with_qna and not (cache_dir / QNA_FILE).exists()
+
+    if _has_complete_cache(cache_dir) and not qna_needed:
         size = sum((cache_dir / f).stat().st_size for f in EXPECTED_FILES)
         print(f"[load-from-hf] Using cached download at {cache_dir}")
         print(f"               ({len(EXPECTED_FILES)} files, ~{_human_bytes(size)} on disk)")
         print(f"               Delete that directory (or pass --force-download) to re-download.")
         return cache_dir
 
-    print(f"[load-from-hf] Downloading {repo_id} from Hugging Face ...")
+    if qna_needed and _has_complete_cache(cache_dir):
+        print(f"[load-from-hf] Corpus already cached; fetching {QNA_FILE} ...")
+    else:
+        print(f"[load-from-hf] Downloading {repo_id} from Hugging Face ...")
     print(f"               target: {cache_dir}")
     print(f"               (this is a one-time download; subsequent runs reuse it)")
     cache_dir.mkdir(parents=True, exist_ok=True)
@@ -141,8 +158,17 @@ def download(repo_id: str, cache_dir: Path, force: bool, token: str | None) -> P
         local_dir=str(cache_dir),
         token=token,
         # Be quiet about file-level chatter but keep the per-file progress bars.
-        allow_patterns=EXPECTED_FILES + ["README.md", "data/atlas_indexes/*"],
+        allow_patterns=(
+            EXPECTED_FILES
+            + ["README.md", "data/atlas_indexes/*"]
+            + ([QNA_FILE, QNA_MANIFEST] if with_qna else [])
+        ),
     )
+    if with_qna and not (cache_dir / QNA_FILE).exists():
+        sys.exit(
+            f"ERROR: --with-qna was requested but {QNA_FILE} is not present in "
+            f"{repo_id}. The Q&A corpus may not be published for this dataset."
+        )
     if not _has_complete_cache(cache_dir):
         missing = [f for f in EXPECTED_FILES if not (cache_dir / f).exists()]
         sys.exit(f"ERROR: download incomplete; missing: {missing}")
@@ -203,6 +229,9 @@ def main() -> int:
                    help="When the target Mongo is Atlas, also create the pca_64_vector_search index.")
     p.add_argument("--force-download", action="store_true",
                    help="Delete the local cache and re-download from HF.")
+    p.add_argument("--with-qna", action="store_true",
+                   help="Also download the training Q&A corpus (data/qna.jsonl.gz, ~220 MB). "
+                        "Only needed to re-train the model; it is not loaded into MongoDB.")
     args = p.parse_args()
 
     if not os.environ.get("MONGODB_URI"):
@@ -211,8 +240,14 @@ def main() -> int:
     cache_dir = _cache_dir_for(args.repo_id, args.cache_dir)
     token = os.environ.get("HF_TOKEN") or None  # only needed for private repos
 
-    download(args.repo_id, cache_dir, args.force_download, token)
+    download(args.repo_id, cache_dir, args.force_download, token, with_qna=args.with_qna)
     verify(cache_dir)
+    if args.with_qna:
+        qna_path = cache_dir / QNA_FILE
+        print(f"\n[load-from-hf] Q&A corpus available at:\n               {qna_path}")
+        print(f"               ({_human_bytes(qna_path.stat().st_size)}; "
+              f"join onto the corpus on (obsid, source_name))")
+        print(f"               It is training-only and is NOT loaded into MongoDB.")
     return load_into_mongo(cache_dir, drop=args.drop, atlas=args.atlas)
 
 

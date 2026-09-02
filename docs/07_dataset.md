@@ -212,6 +212,48 @@ Loading times on a typical laptop:
 | Create indexes (regular) | <1 s | ~10 s |
 | Create vector-search index | n/a | several minutes (background) |
 
+### The training Q&A corpus
+
+The Q&A pairs the model was fine-tuned on are published as a **separate
+file**, `data/qna.jsonl.gz` (~220 MB), rather than being folded into
+`corpus.jsonl.gz`. Two reasons: the Q&A is roughly 77% of the corpus
+collection by size but is only useful if you intend to re-train, and
+keeping it separate means the already-published 305 MB corpus download
+stays valid for everyone else.
+
+```bash
+make load-from-hf-qna       # corpus + Q&A
+```
+
+Or directly:
+
+```bash
+python data/ingest/load_from_huggingface.py --with-qna
+```
+
+One record per `(obsid, source_name)`:
+
+```jsonc
+{
+  "obsid": 12345,
+  "source_name": "2CXO J123456.7+001122",
+  "qna": [
+    {"question": "...", "answer": "...", "category": "SpectralModel"},
+    ...
+  ],
+  "extended_qna": [ [ {"question": "...", "answer": "..."}, ... ], ... ]
+}
+```
+
+`qna` holds single-turn pairs; `extended_qna` holds multi-turn chains (a
+list of lists). Either field is omitted when empty. Join back onto the
+corpus on the `(obsid, source_name)` pair — the coverage is exact, every
+Q&A record has a matching corpus document.
+
+The Q&A corpus is **training-only** and is deliberately not loaded into
+MongoDB; nothing in the running stack reads it. `model/training/train.py`
+consumes the joined shape directly.
+
 ## Rebuilding the full 51 450-source corpus from scratch
 
 Requires the fine-tuned model server (the `pca_64d` and `umap_2d` columns
@@ -253,6 +295,12 @@ python data/ingest/merge_dump.py     # data/full_corpus/dump/ -> data/full_corpu
 ```
 
 ## Generating training Q&A pairs
+
+Note: this **synthesises new** Q&A pairs from catalog metadata using four
+simple templates. It does not reproduce the published corpus above, which
+is far richer (~34 items per source, with `category` labels and multi-turn
+chains). Use it only if you are building Q&A for your own sources; to
+reproduce the paper, download `data/qna.jsonl.gz` instead.
 
 For users who want to re-train the model from scratch:
 
