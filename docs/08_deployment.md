@@ -185,6 +185,63 @@ A few things to be aware of:
   network or with read-only credentials.
 - `OPENAI_API_KEY` is server-side only and never sent to the browser.
 
+## How a production host runs the stack
+
+The EC2 bootstrap installs a systemd unit, `axia.service`, with the
+deployment checked out at `/opt/axia`:
+
+```
+WorkingDirectory=/opt/axia
+ExecStart=docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile local up -d --build
+```
+
+The unit is `systemctl enable`d, so the stack comes back on boot without
+anyone logging in. Underneath it the containers carry
+`restart: unless-stopped` and autoheal restarts any container failing its
+healthcheck, so the containers can legitimately be running while
+`systemctl status axia` reports `inactive (dead)` — the unit is
+`Type=oneshot`, and Docker keeps the stack alive independently of it.
+
+The repo and the docker socket are root-owned, so every management command
+needs `sudo`:
+
+| Command | Purpose |
+|---|---|
+| `sudo systemctl start axia` | Start the stack |
+| `sudo systemctl stop axia` | Stop the stack |
+| `sudo systemctl restart axia` | Rebuild and restart |
+| `sudo journalctl -u axia -f` | Unit-level logs |
+| `sudo docker ps` | Container status |
+
+## Updating a running deployment
+
+```bash
+cd /opt/axia
+sudo make prod-update
+```
+
+That fetches the latest `main`, rebuilds the images, restarts via the
+systemd unit and runs the smoke test. It refuses to run on a dirty working
+tree, and it **builds before it stops anything** — the build is the slow,
+failure-prone step, so the site keeps serving throughout and a failed build
+costs no downtime. On failure it prints the exact commands to roll back to
+the previous commit.
+
+Useful overrides:
+
+| Variable | Effect |
+|---|---|
+| `RESTART_ONLY=1` | Skip the pull; rebuild and restart what is checked out |
+| `ALLOW_DIRTY=1` | Deploy despite local modifications |
+| `BRANCH=...` | Deploy a branch other than `main` |
+| `INSTALL_DIR=...` | Point at a deployment other than `/opt/axia` |
+
+> `.env` is gitignored and is never touched by an update. Settings that
+> live only there — `OPENAI_API_KEY`, `OPENAI_DEFAULT_MODEL`, `DOMAIN` —
+> must be changed by hand on the host. `prod-update` prints the configured
+> `OPENAI_DEFAULT_MODEL` during pre-flight so a stale value is visible
+> before it takes effect.
+
 ## Verifying the stack
 
 `make verify` runs a smoke test:
