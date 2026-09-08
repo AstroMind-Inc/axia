@@ -26,7 +26,7 @@ ENV_PREFIX := env $(foreach v,$(LEAKY_VARS),-u $(v))
 .PHONY: help setup up down restart logs ps load-sample load-from-hf load-from-hf-qna dump-qna push-qna rebuild-from-csc \
         service-dev webapp-dev model-server projector shell-service shell-webapp shell-mongo \
         lint clean clean-data verify \
-        prod-up prod-down prod-restart prod-logs
+        prod-up prod-down prod-restart prod-logs prod-update
 
 help: ## Show this help
 	@echo "Axia — make targets"
@@ -211,3 +211,6 @@ prod-restart: prod-down prod-up ## Restart the production stack
 
 prod-logs: ## Tail production logs
 	@$(ENV_PREFIX) $(DC_PROD) logs -f --tail=100
+
+prod-update: ## Deploy the latest main on a production host: pull, rebuild, restart, verify (run with sudo)
+	@bash scripts/prod-update.sh
