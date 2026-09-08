@@ -9,6 +9,7 @@ from openai import OpenAI
 
 from src.core.logger import get_logger
 from src.core.settings import get_settings
+from src.llm.models import is_reasoning_model, resolve, sampling_kwargs
 
 logger = get_logger(__name__)
 settings = get_settings()
@@ -18,20 +19,24 @@ async def call_openai_api(
     prompt: str,
     max_tokens: int = 10000,
     temperature: float = 0.3,
-    model: str = "gpt-4o-mini",
-    images: Optional[List[str]] = None
+    model: Optional[str] = None,
+    images: Optional[List[str]] = None,
+    reasoning_effort: Optional[str] = None,
 ) -> str:
     """
     Direct OpenAI API call without any prompt modification.
     Supports vision models with base64-encoded images.
-    
+
     Args:
         prompt: The complete prompt to send to OpenAI
         max_tokens: Maximum tokens to generate
-        temperature: Temperature for response generation
-        model: OpenAI model to use
+        temperature: Temperature for response generation. Ignored for reasoning
+            models, which only accept the default and reject anything else.
+        model: OpenAI model to use. Defaults to models.DEFAULT_MODEL.
         images: Optional list of base64-encoded images to include (for vision models)
-        
+        reasoning_effort: Optional override for reasoning models. See
+            models.REASONING_EFFORTS.
+
     Returns:
         Response text from OpenAI
     """
@@ -48,8 +53,18 @@ async def call_openai_api(
     if not api_key:
         raise ValueError("OpenAI API key not found")
 
-    logger.info(f"Calling OpenAI {model} API")
-    
+    model = resolve(model)
+    # Reasoning models reject an explicit temperature, so the legal sampling
+    # parameters are decided centrally rather than at each call site.
+    tuning = sampling_kwargs(model, temperature, reasoning_effort=reasoning_effort)
+    if is_reasoning_model(model):
+        logger.info(
+            "Calling OpenAI %s (reasoning_effort=%s, temperature omitted)",
+            model, tuning.get("reasoning_effort"),
+        )
+    else:
+        logger.info("Calling OpenAI %s (temperature=%s)", model, temperature)
+
     client = OpenAI(api_key=api_key)
 
     # Build user message content based on whether images are provided
@@ -81,7 +96,7 @@ async def call_openai_api(
             }
         ],
         max_completion_tokens=max_tokens,
-        temperature=temperature
+        **tuning,
     )
 
     response_text = response.choices[0].message.content

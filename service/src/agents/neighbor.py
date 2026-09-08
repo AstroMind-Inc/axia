@@ -4,6 +4,7 @@ Neighbor Analysis Agent for comparing selected object with nearest neighbors.
 
 from typing import Dict, Any, List
 from ..llm.openai_client import call_openai_api
+from ..llm.models import resolve
 from src.spectrum.snapshot import render_spectrum_text
 
 class NeighborAnalysisAgent:
@@ -18,7 +19,7 @@ class NeighborAnalysisAgent:
         selected_object_spectrum: Dict[str, Any],
         neighbor_spectra: List[Dict[str, Any]],
         *,
-        openai_model: str = "gpt-5-mini"
+        openai_model: str | None = None
     ) -> str:
         """
         Analyze the selected object against its nearest neighbors to provide comparative insights.
@@ -38,15 +39,11 @@ class NeighborAnalysisAgent:
                 selected_object_spectrum, 
                 neighbor_spectra
             )
-            model = openai_model 
-            if (model == "gpt-5") or (model == "gpt-5-mini") or (model == "gpt-5-nano"):
-                temperature = 1.0
-            else:
-                temperature = 0.3
+            model = resolve(openai_model)
             # Generate analysis using direct OpenAI API call
             result = await call_openai_api(
                 prompt=prompt,
-                temperature=temperature,
+                temperature=0.3,
                 max_tokens=20000,
                 model=model
             )

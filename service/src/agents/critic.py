@@ -4,6 +4,7 @@ Critic agent for reviewing astrophysics analyses and pointing out inconsistencie
 
 from typing import Dict, Any, List
 from ..llm.openai_client import call_openai_api
+from ..llm.models import resolve
 
 class CriticAgent:
     """
@@ -65,20 +66,16 @@ COMMON PITFALLS:
 Be constructive but thorough. Point out specific concerns and suggest additional checks or alternative approaches.
 If analyses appear sound, say so clearly. Your goal is to improve the science, not just find problems."""
 
-    async def review_analyses(self, review_prompt: str, *, openai_model: str = "gpt-5-mini") -> str:
+    async def review_analyses(self, review_prompt: str, *, openai_model: str | None = None) -> str:
         """
         Review analyses and provide critical assessment.
         """
         full_prompt = f"{self.system_prompt}\n\n{review_prompt}"
-        model = openai_model 
-        if (model == "gpt-5") or (model == "gpt-5-mini") or (model == "gpt-5-nano"):
-            temperature = 1.0
-        else:
-            temperature = 0.7
+        model = resolve(openai_model)
         try:
             response = await call_openai_api(
                 prompt=full_prompt,
-                temperature=temperature,
+                temperature=0.7,
                 max_tokens=20000,
                 model=model
             )

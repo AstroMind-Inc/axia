@@ -176,7 +176,7 @@ export default function ChatWindow() {
   const [expandedExchanges, setExpandedExchanges] = useState<
     Record<string, boolean>
   >({});
-  const [openaiModel, setOpenaiModel] = useState<string>("gpt-5");
+  const [openaiModel, setOpenaiModel] = useState<string>("gpt-5.6-sol");
   const [showOpenaiModelMenu, setShowOpenaiModelMenu] = useState<boolean>(false);
   const [agentConfig, setAgentConfig] = useState<AgentConfig>(DEFAULT_AGENT_CONFIG);
   const openaiMenuRef = useRef<HTMLDivElement | null>(null);
@@ -2275,9 +2275,9 @@ export default function ChatWindow() {
                           style={{ bottom: 'calc(100% + 8px)' }}
                         >
                           {[
-                            { key: 'gpt-5', label: 'gpt-5', hint: 'Highest quality and reasoning; slower responses' },
-                            { key: 'gpt-5-mini', label: 'gpt-5-mini', hint: 'Balanced quality and speed; good default' },
-                            { key: 'gpt-5-nano', label: 'gpt-5-nano', hint: 'Fastest and lowest cost; brief answers' },
+                            { key: 'gpt-5.6-sol', label: 'gpt-5.6-sol', hint: 'Flagship: deepest reasoning and best science; slower responses' },
+                            { key: 'gpt-5.6-terra', label: 'gpt-5.6-terra', hint: 'Balanced quality, cost and speed; good everyday default' },
+                            { key: 'gpt-5.6-luna', label: 'gpt-5.6-luna', hint: 'Fastest and cheapest; best for short or high-volume questions' },
                           ].map((opt) => (
                             <button
                               key={opt.key}

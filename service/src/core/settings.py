@@ -8,8 +8,10 @@ startup and disables the rest. Only MongoDB is strictly required.
 from functools import lru_cache
 from typing import Optional
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from src.llm.models import DEFAULT_MODEL, SUPPORTED_MODELS
 
 
 class Settings(BaseSettings):
@@ -56,9 +58,32 @@ class Settings(BaseSettings):
         None, description="OpenAI API key for GPT-5 agents."
     )
     openai_default_model: str = Field(
-        "gpt-5-mini",
+        DEFAULT_MODEL,
         description="Default OpenAI model used when the request doesn't specify one.",
     )
+
+    @field_validator("openai_default_model")
+    @classmethod
+    def _warn_on_unknown_model(cls, v: str) -> str:
+        """Warn loudly about a stale OPENAI_DEFAULT_MODEL rather than failing.
+
+        Retired ids (gpt-5-mini, gpt-4o, o3-mini, ...) are rejected by the API
+        at request time with an error that does not obviously point back at
+        this setting. The value is still passed through, since a deployment
+        may legitimately use a model this build has not heard of.
+        """
+        if v and v not in SUPPORTED_MODELS:
+            import warnings
+
+            warnings.warn(
+                f"OPENAI_DEFAULT_MODEL={v!r} is not a model this build knows about "
+                f"(expected one of {', '.join(SUPPORTED_MODELS)}). If chat requests "
+                f"fail with a 400, update this setting or unset it to use "
+                f"{DEFAULT_MODEL}.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+        return v
 
     # Service runtime --------------------------------------------------------
     service_host: str = Field("0.0.0.0")

@@ -163,7 +163,7 @@ Everything lives in the top-level `.env`. The same file is read by
 | `MONGODB_METADATA_COLLECTION` | `metadata_records` | |
 | `MODEL_SERVER_URL` | empty | URL of the fine-tuned model server. Empty = Event Analyst disabled. |
 | `OPENAI_API_KEY` | empty | Required for the GPT-5 agents. |
-| `OPENAI_DEFAULT_MODEL` | `gpt-5-mini` | Model id used when the request doesn't specify one. |
+| `OPENAI_DEFAULT_MODEL` | `gpt-5.6-sol` | Model id used when the request does not specify one. One of `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`. |
 | `SERVICE_HOST` / `SERVICE_PORT` | `0.0.0.0 / 8000` | Service bind address. |
 | `SERVICE_DEBUG` | `false` | Enables hot reload + debug logs. |
 | `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | Where the webapp finds the service. |

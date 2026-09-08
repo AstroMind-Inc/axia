@@ -30,6 +30,8 @@ from typing import Any, Dict, List, Optional, Tuple
 import httpx
 from openai import AsyncOpenAI
 
+from ..llm.models import resolve, tool_kwargs
+
 logger = logging.getLogger(__name__)
 
 
@@ -309,19 +311,18 @@ class ToolAgent:
         #    }
     """
 
-    DEFAULT_MODEL = "gpt-4o"
     DEFAULT_MAX_ITERATIONS = 10
     DEFAULT_TEMPERATURE = 0.3
 
     def __init__(
         self,
         openai_client: AsyncOpenAI,
-        model: str = DEFAULT_MODEL,
+        model: str | None = None,
         max_iterations: int = DEFAULT_MAX_ITERATIONS,
         temperature: float = DEFAULT_TEMPERATURE,
     ):
         self.openai_client = openai_client
-        self.model = model
+        self.model = resolve(model)
         self.max_iterations = max_iterations
         self.temperature = temperature
         logger.info(
@@ -403,11 +404,14 @@ class ToolAgent:
                 logger.info("ToolAgent iteration %d/%d", iteration, self.max_iterations)
 
                 try:
+                    # Reasoning and function tools cannot be combined on Chat
+                    # Completions, so tool_kwargs turns reasoning off for
+                    # reasoning models and passes temperature for the rest.
                     completion = await self.openai_client.chat.completions.create(
                         model=self.model,
                         messages=messages,
                         tools=[HIPS2FITS_TOOL_SPEC],
-                        temperature=self.temperature,
+                        **tool_kwargs(self.model, self.temperature),
                     )
                 except Exception as e:  # noqa: BLE001
                     logger.error("OpenAI call failed (iter %d): %s", iteration, e, exc_info=True)

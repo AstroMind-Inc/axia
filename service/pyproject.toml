@@ -27,7 +27,7 @@ requests = "^2.32.0"
 tenacity = "^9.0.0"
 
 # OpenAI
-openai = "^1.50.0"
+openai = "^3.7.0"
 
 # YAML for tool definitions
 pyyaml = "^6.0.2"
