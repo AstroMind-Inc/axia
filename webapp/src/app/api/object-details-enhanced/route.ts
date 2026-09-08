@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceUrl } from '@/app/lib/service-url';
+import { requireUserId } from '@/app/lib/authz';
 
 export async function POST(request: NextRequest) {
   try {
+    const authz = await requireUserId();
+    if ('error' in authz) return authz.error;
+
     const body = await request.json();
     const { object_data } = body;
 

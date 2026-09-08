@@ -64,6 +64,18 @@ echo "  Example: https://abc123.runpod.io or http://gpu-host:8000"
 read -rp "MODEL_SERVER_URL: " MODEL_SERVER_URL
 
 # ---------------------------------------------------------------------------
+# Google OAuth (required for the playground)
+# ---------------------------------------------------------------------------
+echo ""
+echo "Google OAuth (required). Redirect URI must be:"
+echo "  {AUTH_URL}/api/auth/callback/google"
+read -rp "AUTH_GOOGLE_ID: " AUTH_GOOGLE_ID
+read -rp "AUTH_GOOGLE_SECRET: " AUTH_GOOGLE_SECRET
+read -rp "Public site URL [http://localhost:3000]: " AUTH_URL
+AUTH_URL=${AUTH_URL:-http://localhost:3000}
+AUTH_SECRET=$(openssl rand -base64 32)
+
+# ---------------------------------------------------------------------------
 # Write .env
 # ---------------------------------------------------------------------------
 cat > "$ENV_FILE" <<EOF
@@ -93,6 +105,12 @@ NEXT_PUBLIC_MONGODB_DB=$MONGODB_DB
 NEXT_PUBLIC_MONGODB_MODE=$MONGODB_MODE
 NEXT_PUBLIC_ALLOWED_FILE_TYPES=.json,.pkl
 NEXT_PUBLIC_DEBUG=false
+
+AUTH_SECRET=$AUTH_SECRET
+AUTH_GOOGLE_ID=$AUTH_GOOGLE_ID
+AUTH_GOOGLE_SECRET=$AUTH_GOOGLE_SECRET
+AUTH_URL=$AUTH_URL
+AUTH_TRUST_HOST=true
 EOF
 
 chmod 600 "$ENV_FILE"
@@ -110,4 +128,7 @@ if [[ -z "$OPENAI_API_KEY" ]]; then
 fi
 if [[ -z "$MODEL_SERVER_URL" ]]; then
     echo "  NOTE: MODEL_SERVER_URL is empty. Event Analyst agent is disabled."
+fi
+if [[ -z "$AUTH_GOOGLE_ID" || -z "$AUTH_GOOGLE_SECRET" ]]; then
+    echo "  WARNING: Google OAuth is not configured. The playground will redirect to /login."
 fi

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToMongoDB, MONGODB_MODE, SOURCES_COLLECTION } from '@/app/lib/mongodb';
+import { canAccessCollection, requireUserId } from '@/app/lib/authz';
+import { excludeSelfNeighbors } from '@/app/lib/neighbors';
 
 // Projection used by both the Atlas $vectorSearch and the local brute-force fallback.
 const PROJECTION = {
@@ -42,12 +44,25 @@ function cosine(a: number[], b: number[]): number {
 
 export async function POST(request: NextRequest) {
   try {
+    const authz = await requireUserId();
+    if ('error' in authz) return authz.error;
+
     const body = await request.json();
     const {
       collection_name,
       vector,
       limit = 10,
-    }: { collection_name?: string; vector: number[]; limit?: number } = body;
+      exclude_obsid,
+      exclude_source_name,
+      exclude_id,
+    }: {
+      collection_name?: string;
+      vector: number[];
+      limit?: number;
+      exclude_obsid?: unknown;
+      exclude_source_name?: unknown;
+      exclude_id?: unknown;
+    } = body;
 
     if (!Array.isArray(vector) || vector.length === 0) {
       return NextResponse.json(
@@ -57,10 +72,11 @@ export async function POST(request: NextRequest) {
     }
 
     const { db } = await connectToMongoDB();
-    // Honour an explicit `collection_name` when provided (used by some routes
-    // that hold legacy dataset names), otherwise fall back to the configured
-    // sources collection.
-    const coll = db.collection(collection_name || SOURCES_COLLECTION);
+    const targetCollection = collection_name || SOURCES_COLLECTION;
+    if (!(await canAccessCollection(db, targetCollection, authz.userId))) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+    const coll = db.collection(targetCollection);
     const k = Math.min(Number(limit) || 10, 50);
 
     if (MONGODB_MODE === 'external') {
@@ -72,14 +88,17 @@ export async function POST(request: NextRequest) {
             path: 'pca_64d',
             queryVector: vector,
             numCandidates: 500,
-            limit: k,
+            limit: k + 1,
           },
         },
         {
           $project: { ...PROJECTION, score: { $meta: 'vectorSearchScore' } },
         },
       ];
-      const neighbors = await coll.aggregate(pipeline).toArray();
+      const neighbors = excludeSelfNeighbors(
+        await coll.aggregate(pipeline).toArray(),
+        { _id: exclude_id, obsid: exclude_obsid, source_name: exclude_source_name },
+      ).slice(0, k);
       return NextResponse.json({ neighbors, totalFound: neighbors.length });
     }
 
@@ -92,7 +111,11 @@ export async function POST(request: NextRequest) {
       scored.push({ ...doc, score: cosine(vector, v) });
     }
     scored.sort((a, b) => b.score - a.score);
-    const neighbors = scored.slice(0, k);
+    const neighbors = excludeSelfNeighbors(scored.slice(0, k + 1), {
+      _id: exclude_id,
+      obsid: exclude_obsid,
+      source_name: exclude_source_name,
+    }).slice(0, k);
     return NextResponse.json({ neighbors, totalFound: neighbors.length });
   } catch (error: any) {
     console.error('Error in nearest-neighbors:', error);

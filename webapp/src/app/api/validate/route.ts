@@ -4,9 +4,13 @@
 // using GPT-as-judge. Returns {result: {accuracy_rating, evaluation}, api_call_details}.
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceUrl } from '@/app/lib/service-url';
+import { requireUserId } from '@/app/lib/authz';
 
 export async function POST(request: NextRequest) {
   try {
+    const authz = await requireUserId();
+    if ('error' in authz) return authz.error;
+
     const body = await request.json();
 
     const response = await fetch(`${getServiceUrl()}/v1/validate`, {

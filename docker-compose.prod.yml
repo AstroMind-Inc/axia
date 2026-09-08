@@ -1,7 +1,7 @@
 name: axia
 
 # Production overlay — extends docker-compose.yml with:
-#   - Caddy reverse proxy (auto-HTTPS + basic auth)
+#   - Caddy reverse proxy (auto-HTTPS)
 #   - Autoheal (restarts unhealthy containers)
 #   - Log rotation on all containers
 #   - Internal-only ports (only 80/443 exposed)
@@ -12,7 +12,7 @@ name: axia
 
 services:
   # ---------------------------------------------------------------------------
-  # Caddy — reverse proxy, automatic HTTPS via Let's Encrypt, basic auth
+  # Caddy — reverse proxy, automatic HTTPS via Let's Encrypt
   # ---------------------------------------------------------------------------
   caddy:
     image: caddy:2-alpine
@@ -98,6 +98,9 @@ services:
   webapp:
     ports: !override
       - "127.0.0.1:3000:3000"
+    environment:
+      AUTH_TRUST_HOST: "true"
+      AUTH_URL: ${AUTH_URL:-https://${DOMAIN:-localhost}}
     logging:
       driver: json-file
       options:

@@ -1,9 +1,13 @@
 // app/api/chat/route.ts
 import api from '@/app/lib/api';
 import { NextResponse } from 'next/server';
+import { requireUserId } from '@/app/lib/authz';
 
 export async function POST(request: Request) {
   try {
+    const authz = await requireUserId();
+    if ('error' in authz) return authz.error;
+
     const body = await request.json();
     const {
       message,
