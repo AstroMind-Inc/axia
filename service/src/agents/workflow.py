@@ -16,6 +16,7 @@ from ..llm.openai_infer import generate_openai_response
 from src.spectrum.snapshot import make_spectrum_snapshot, render_spectrum_text
 from src.core.settings import get_settings
 from src.core.logger import get_logger
+from src.llm.models import resolve
 
 logger = get_logger(__name__)
 
@@ -38,7 +39,7 @@ class SimpleWorkflow:
         enable_tools: bool = True,
     ):
         self.model_api_url = model_api_url
-        self.openai_model = openai_model or "gpt-5-mini"
+        self.openai_model = resolve(openai_model)
         self.critic = CriticAgent()
         self.moderator = ConversationModerator()
         self.neighbor_analyst = NeighborAnalysisAgent()

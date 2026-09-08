@@ -6,6 +6,7 @@ from src.core.logger import get_logger
 from src.spectrum.snapshot import make_spectrum_snapshot, render_spectrum_text, create_light_curve_image
 from src.spectrum.de_dt_map import create_de_dt_image
 from .openai_client import call_openai_api
+from .models import resolve
 
 logger = get_logger(__name__)
 
@@ -108,12 +109,12 @@ async def generate_openai_response(
     data_obj: Dict[str, Any],
     history: List[ChatMessage],
     *,
-    openai_model: str = "gpt-5-mini",
+    openai_model: Optional[str] = None,
     max_tokens: int = 10000,
     temperature: float = 0.3
 ) -> Tuple[str, str]:
     """
-    Generate a response using OpenAI's gpt-4.1-mini model with Chandra observation data.
+    Generate a response using OpenAI with Chandra observation data.
     Automatically includes light curve image for vision-capable models.
     
     Args:
@@ -159,11 +160,7 @@ async def generate_openai_response(
         )
         
         logger.info("Calling OpenAI for Chandra observation analysis")
-        model = openai_model
-        if (model == "gpt-5") or (model == "gpt-5-mini") or (model == "gpt-5-nano"):
-            temperature = 1.0
-        else:
-            temperature = 0.3        
+        model = resolve(openai_model)
         
         # Prepare images list with both light curve and dE-dt map
         images = []

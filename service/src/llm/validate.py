@@ -14,6 +14,11 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 
 from src.core.logger import get_logger
 from src.core.settings import get_settings
+from src.llm.models import DEFAULT_MODEL
+
+# The validator uses the Responses API, where reasoning effort is nested
+# under `reasoning` rather than passed as `reasoning_effort`.
+VALIDATION_MODEL = DEFAULT_MODEL
 
 logger = get_logger(__name__)
 
@@ -98,7 +103,7 @@ async def validate_with_openai(user_message: str, answer: str, context_str: str)
     if not settings.openai_api_key:
         return {
             "result": {"error": "**Error**: OPENAI_API_KEY is not configured."},
-            "api_call_details": {"model": "o3-mini", "error": "OPENAI_API_KEY missing"},
+            "api_call_details": {"model": VALIDATION_MODEL, "error": "OPENAI_API_KEY missing"},
         }
 
     prompt = (
@@ -117,7 +122,7 @@ async def validate_with_openai(user_message: str, answer: str, context_str: str)
     try:
         response = await _call_openai(
             client,
-            model="o3-mini",
+            model=VALIDATION_MODEL,
             reasoning={"effort": "medium"},
             text=_RESPONSE_FORMAT,
             truncation="auto",
@@ -141,11 +146,11 @@ async def validate_with_openai(user_message: str, answer: str, context_str: str)
         result = _extract_json(response)
         return {
             "result": result,
-            "api_call_details": {"model": "o3-mini", "prompt": prompt, "max_tokens": 5000},
+            "api_call_details": {"model": VALIDATION_MODEL, "prompt": prompt, "max_tokens": 5000},
         }
     except Exception as e:  # noqa: BLE001
         logger.error("OpenAI validation call failed: %s", e)
         return {
             "result": {"error": f"**Error**: Failed to validate answer due to API error.\n\n{e}"},
-            "api_call_details": {"model": "o3-mini", "error": str(e), "prompt": prompt},
+            "api_call_details": {"model": VALIDATION_MODEL, "error": str(e), "prompt": prompt},
         }
