@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToMongoDB, MONGODB_MODE, SOURCES_COLLECTION } from '@/app/lib/mongodb';
+import { cosine, createTopK } from '@/app/lib/vector-search';
 
 // Projection used by both the Atlas $vectorSearch and the local brute-force fallback.
 const PROJECTION = {
@@ -24,21 +25,14 @@ const PROJECTION = {
   apec_stat: 1,
 };
 
-function cosine(a: number[], b: number[]): number {
-  const n = Math.min(a.length, b.length);
-  let dot = 0,
-    na = 0,
-    nb = 0;
-  for (let i = 0; i < n; i++) {
-    const x = a[i];
-    const y = b[i];
-    dot += x * y;
-    na += x * x;
-    nb += y * y;
-  }
-  if (na === 0 || nb === 0) return 0;
-  return dot / Math.sqrt(na * nb);
-}
+// Only what scoring needs. The full PROJECTION carries event_list, which is
+// ~72% of the payload and plays no part in similarity — fetching it for every
+// source in the collection moved ~360MB per request. The winners are re-read
+// with the full projection once they are known.
+const SCAN_PROJECTION = {
+  _id: 1,
+  pca_64d: 1,
+};
 
 export async function POST(request: NextRequest) {
   try {
@@ -83,16 +77,31 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ neighbors, totalFound: neighbors.length });
     }
 
-    // Local-mode brute force fallback. With a few thousand docs this is sub-50ms.
-    const cursor = coll.find({ pca_64d: { $exists: true } }, { projection: PROJECTION });
-    const scored: any[] = [];
+    // Local-mode brute force fallback. Scored with a minimal projection and a
+    // bounded top-K, so neither the payload nor the memory grows with the
+    // collection; only the winners are read in full.
+    const cursor = coll.find({ pca_64d: { $exists: true } }, { projection: SCAN_PROJECTION });
+    const top = createTopK<{ _id: any }>(k);
     for await (const doc of cursor) {
       const v = doc.pca_64d as number[] | undefined;
       if (!Array.isArray(v)) continue;
-      scored.push({ ...doc, score: cosine(vector, v) });
+      top.add({ _id: doc._id }, cosine(vector, v));
     }
-    scored.sort((a, b) => b.score - a.score);
-    const neighbors = scored.slice(0, k);
+
+    const best = top.values();
+    if (best.length === 0) {
+      return NextResponse.json({ neighbors: [], totalFound: 0 });
+    }
+    const hydrated = await coll
+      .find({ _id: { $in: best.map((b) => b._id) } }, { projection: PROJECTION })
+      .toArray();
+    const byId = new Map(hydrated.map((d) => [String(d._id), d]));
+    const neighbors = best
+      .map((b) => {
+        const doc = byId.get(String(b._id));
+        return doc ? { ...doc, score: b.score } : null;
+      })
+      .filter((d): d is NonNullable<typeof d> => d !== null);
     return NextResponse.json({ neighbors, totalFound: neighbors.length });
   } catch (error: any) {
     console.error('Error in nearest-neighbors:', error);
