@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToMongoDB } from '@/app/lib/mongodb';
+import { requestEmbeddings } from '@/app/lib/embeddings';
 
 const COLLECTION_NAME = 'user_uploaded_sources';
 
@@ -122,25 +123,20 @@ export async function POST(request: NextRequest) {
           console.log(`🚀 Generating embeddings for object: ${obj._id || obj.obsid || 'unknown'}`);
           objDebug.embeddingStatus = 'attempting';
           
-          // Call our embeddings API
-          // Call internal API route (same origin) to forward to astromind-service
-          const origin = request.nextUrl.origin;
-          const embeddingsResponse = await fetch(`${origin}/api/embeddings`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            // Mirror chat flow: pass model_api_url so backend uses exact same endpoint
-            body: JSON.stringify({ 
-              event_list: obj.event_list,
-              model_api_url,
-              is_pruned: !!is_pruned
-            })
+          // Call the service directly. Fetching our own /api/embeddings route
+          // breaks behind Caddy: see requestEmbeddings in lib/embeddings.ts.
+          // Mirror chat flow: pass model_api_url so backend uses exact same endpoint
+          const embeddingsResult = await requestEmbeddings({
+            event_list: obj.event_list,
+            model_api_url,
+            is_pruned: !!is_pruned
           });
 
-          console.log(`📡 Embeddings API response status: ${embeddingsResponse.status}`);
-          objDebug.apiResponseStatus = embeddingsResponse.status;
+          console.log(`📡 Embeddings API response status: ${embeddingsResult.status}`);
+          objDebug.apiResponseStatus = embeddingsResult.status;
 
-          if (embeddingsResponse.ok) {
-            const embeddingsData = await embeddingsResponse.json();
+          if (embeddingsResult.status === 200) {
+            const embeddingsData = embeddingsResult.body;
             console.log(`📊 Embeddings data received:`, embeddingsData);
             objDebug.embeddingsReceived = embeddingsData;
 
@@ -193,22 +189,9 @@ export async function POST(request: NextRequest) {
               console.log(`✅ Generated embeddings for object: ${obj._id || obj.obsid || 'unknown'}`);
             }
           } else {
-            const contentType = embeddingsResponse.headers.get('content-type') || '';
-            let errorData: any = null;
-            let concise = '';
-            
-            try {
-              const errorText = await embeddingsResponse.text();
-              if (contentType.includes('application/json')) {
-                errorData = JSON.parse(errorText);
-                concise = errorData.error || errorText;
-              } else {
-                concise = `Embeddings API ${embeddingsResponse.status}: ${embeddingsResponse.statusText}`;
-              }
-            } catch (e) {
-              concise = `Embeddings API ${embeddingsResponse.status}: ${embeddingsResponse.statusText}`;
-            }
-            
+            const errorData = embeddingsResult.body;
+            const concise: string = errorData.error || `Embeddings API ${embeddingsResult.status}`;
+
             console.warn(`⚠️ Failed to generate embeddings for object ${obj._id || obj.obsid || 'unknown'}:`, concise);
             objDebug.embeddingStatus = 'api_error';
             objDebug.error = concise;
