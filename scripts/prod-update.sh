@@ -39,6 +39,20 @@ git -C "$INSTALL_DIR" rev-parse --git-dir >/dev/null 2>&1 || die "$INSTALL_DIR i
 cd "$INSTALL_DIR"
 [[ -f .env ]] || die "$INSTALL_DIR/.env is missing. Production config lives there and is never in git."
 
+# Every page and API route requires Google sign-in. Without these the new
+# containers would come up unable to sign anyone in (or fail every request
+# for want of a session secret), after the old ones were already stopped.
+# Check before building so a missing value costs no downtime.
+missing_auth=()
+for var in AUTH_SECRET AUTH_GOOGLE_ID AUTH_GOOGLE_SECRET; do
+    value="$(grep -E "^${var}=" .env | tail -n1 | cut -d= -f2- | tr -d "\"'" || true)"
+    [[ -n "$value" ]] || missing_auth+=("$var")
+done
+if (( ${#missing_auth[@]} > 0 )); then
+    die "$INSTALL_DIR/.env is missing ${missing_auth[*]}. Google sign-in needs them; see docs/08_deployment.md (Google sign-in)."
+fi
+ok "Google sign-in configured (AUTH_SECRET, AUTH_GOOGLE_ID, AUTH_GOOGLE_SECRET)"
+
 # .env is gitignored, so a pull can never update it. Surfacing the model here
 # because a stale OPENAI_DEFAULT_MODEL silently selects a retired model.
 configured_model="$(grep -E '^OPENAI_DEFAULT_MODEL=' .env | cut -d= -f2- | tr -d '"' || true)"

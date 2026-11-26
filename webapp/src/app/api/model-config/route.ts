@@ -6,6 +6,10 @@
 import { NextResponse } from 'next/server';
 import { connectToMongoDB } from '@/app/lib/mongodb';
 import { requireUserId } from '@/app/lib/authz';
+import {
+  CUSTOM_MODEL_URL_DISABLED_MESSAGE,
+  customModelUrlsAllowed,
+} from '@/app/lib/model-url';
 
 const COLLECTION = 'model_config';
 const DEFAULT_MODEL_IDS = ['astromind-multi-agent', 'astromind-openai'];
@@ -57,6 +61,15 @@ export async function POST(request: Request) {
   try {
     const authz = await requireUserId();
     if ('error' in authz) return authz.error;
+
+    // model_config is one document shared by every user, so writing it changes
+    // where everyone's requests go. Only allowed where custom URLs are.
+    if (!customModelUrlsAllowed()) {
+      return NextResponse.json(
+        { success: false, message: CUSTOM_MODEL_URL_DISABLED_MESSAGE },
+        { status: 403 },
+      );
+    }
 
     const { modelId, apiUrl } = await request.json();
 

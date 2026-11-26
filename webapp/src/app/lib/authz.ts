@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { ObjectId, type Db } from "mongodb";
 import { auth } from "@/auth";
+import { METADATA_COLLECTION } from "@/app/lib/collection-names";
 import { isPublicCorpus, isSystemCollection } from "@/app/lib/collections";
 
 export type AuthResult =
@@ -36,12 +37,16 @@ export async function findOwnedThread(
 
 export async function canAccessCollection(
   db: Db,
-  collectionName: string,
+  collectionName: unknown,
   userId: string,
 ): Promise<boolean> {
-  if (!collectionName || isSystemCollection(collectionName)) return false;
+  // Collection names arrive from request bodies and URLs. Anything but a
+  // non-empty string (e.g. a `{ "$ne": null }` operator object) is refused
+  // before it can reach a query.
+  if (typeof collectionName !== "string" || !collectionName) return false;
+  if (isSystemCollection(collectionName)) return false;
   if (isPublicCorpus(collectionName)) return true;
-  const meta = await db.collection("metadata_records").findOne({
+  const meta = await db.collection(METADATA_COLLECTION).findOne({
     collection_name: collectionName,
     user_id: userId,
   });

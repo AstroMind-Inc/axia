@@ -1,6 +1,6 @@
 // app/api/upload/route.ts
 import { NextResponse } from 'next/server';
-import { connectToMongoDB } from '@/app/lib/mongodb';
+import { connectToMongoDB, METADATA_COLLECTION } from '@/app/lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { requireUserId } from '@/app/lib/authz';
 
@@ -138,7 +138,7 @@ export async function POST(request: Request) {
       has_event_lists: sanitizedObjects.some(obj => obj.event_list)
     };
 
-    const metaResult = await metaDb.collection('metadata_records').insertOne(metadataRecord);
+    const metaResult = await metaDb.collection(METADATA_COLLECTION).insertOne(metadataRecord);
 
     const successMessage = errors.length > 0
       ? `Successfully uploaded ${sanitizedObjects.length} objects to dataset "${datasetName}". Some objects had NaN values that were replaced with null.`

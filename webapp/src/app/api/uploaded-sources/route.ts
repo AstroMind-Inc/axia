@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectToMongoDB } from '@/app/lib/mongodb';
 import { requestEmbeddings } from '@/app/lib/embeddings';
 import { requireUserId } from '@/app/lib/authz';
+import { forwardableModelUrl } from '@/app/lib/model-url';
 
 const COLLECTION_NAME = 'user_uploaded_sources';
 
@@ -134,7 +135,7 @@ export async function POST(request: NextRequest) {
           // Mirror chat flow: pass model_api_url so backend uses exact same endpoint
           const embeddingsResult = await requestEmbeddings({
             event_list: obj.event_list,
-            model_api_url,
+            model_api_url: forwardableModelUrl(model_api_url),
             is_pruned: !!is_pruned
           });
 

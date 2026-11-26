@@ -62,7 +62,6 @@ and talks to Mongo directly. Routes are grouped accordingly.
 | `GET /api/fields` | `source_data` | Looks up legacy field metadata; returns 404 on fresh stacks (harmless). |
 | `GET/POST/DELETE /api/uploaded-sources` | `user_uploaded_sources` | Custom user uploads. |
 | `POST /api/upload` | `sources` + `metadata_records` | Insert a new dataset. |
-| `POST /api/parse-pkl` | _stdin to python_ | Server-side pickle parser. |
 | `GET/POST /api/chat-threads` | `chat_threads` | Chat history. |
 | `GET/PUT/DELETE /api/chat-threads/[threadId]` | `chat_threads` | Per-thread operations. |
 | `GET/POST /api/chat-threads/[threadId]/messages` | `chat_messages` | Messages in a thread. |

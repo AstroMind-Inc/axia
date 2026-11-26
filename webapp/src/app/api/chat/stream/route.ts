@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { getServiceUrl } from '@/app/lib/service-url';
 import { connectToMongoDB } from '@/app/lib/mongodb';
 import { findOwnedThread, notFound, requireUserId } from '@/app/lib/authz';
+import { forwardableModelUrl } from '@/app/lib/model-url';
 
 export async function POST(request: Request) {
   try {
@@ -71,9 +72,11 @@ export async function POST(request: Request) {
       context_settings: context_settings || null,
     };
 
-    // Add model_api_url if present
-    if (model_api_url) {
-      transformedBody.model_api_url = model_api_url;
+    // Forward a client model URL only where the deployment allows it;
+    // otherwise the service uses its own configured model server.
+    const forwardedModelUrl = forwardableModelUrl(model_api_url);
+    if (forwardedModelUrl) {
+      transformedBody.model_api_url = forwardedModelUrl;
     }
 
     if (openai_model) {

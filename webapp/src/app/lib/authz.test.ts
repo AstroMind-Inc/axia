@@ -10,6 +10,7 @@ describe("isSystemCollection", () => {
     expect(isSystemCollection("chat_messages")).toBe(true);
     expect(isSystemCollection("chat_message_feedbacks")).toBe(true);
     expect(isSystemCollection("metadata_records")).toBe(true);
+    expect(isSystemCollection("model_config")).toBe(true);
     expect(SYSTEM_COLLECTIONS.has("sources")).toBe(false);
   });
 });

@@ -21,7 +21,9 @@ export default auth((req) => {
   }
 
   const login = new URL("/login", req.nextUrl.origin);
-  login.searchParams.set("callbackUrl", req.nextUrl.pathname);
+  // Keep the query string so deep links survive the round trip through
+  // Google. Auth.js only redirects to same-origin callback URLs.
+  login.searchParams.set("callbackUrl", req.nextUrl.pathname + req.nextUrl.search);
   return NextResponse.redirect(login);
 });
 

@@ -121,6 +121,7 @@ services:
       # Server-side (used by API routes running in Node)
       SERVICE_URL: http://service:8000
       MODEL_SERVER_URL: ${MODEL_SERVER_URL:-}
+      ALLOW_CUSTOM_MODEL_URL: ${ALLOW_CUSTOM_MODEL_URL:-false}
       PROJECTOR_URL: http://projector:8001
       MONGODB_URI: ${MONGODB_URI:-mongodb://mongo:27017}
       MONGODB_DB: ${MONGODB_DB:-axia}
