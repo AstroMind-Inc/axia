@@ -1,9 +1,15 @@
 // app/api/chat/stream/route.ts
 import { NextResponse } from 'next/server';
 import { getServiceUrl } from '@/app/lib/service-url';
+import { connectToMongoDB } from '@/app/lib/mongodb';
+import { findOwnedThread, notFound, requireUserId } from '@/app/lib/authz';
+import { forwardableModelUrl } from '@/app/lib/model-url';
 
 export async function POST(request: Request) {
   try {
+    const authz = await requireUserId();
+    if ('error' in authz) return authz.error;
+
     const body = await request.json();
     const {
       message,
@@ -66,9 +72,11 @@ export async function POST(request: Request) {
       context_settings: context_settings || null,
     };
 
-    // Add model_api_url if present
-    if (model_api_url) {
-      transformedBody.model_api_url = model_api_url;
+    // Forward a client model URL only where the deployment allows it;
+    // otherwise the service uses its own configured model server.
+    const forwardedModelUrl = forwardableModelUrl(model_api_url);
+    if (forwardedModelUrl) {
+      transformedBody.model_api_url = forwardedModelUrl;
     }
 
     if (openai_model) {
@@ -97,6 +105,9 @@ export async function POST(request: Request) {
 
     // Add thread_id if present (IMPORTANT for DB saving!)
     if (thread_id) {
+      const { appDb } = await connectToMongoDB();
+      const thread = await findOwnedThread(appDb, thread_id, authz.userId);
+      if (!thread) return notFound();
       transformedBody.thread_id = thread_id;
       console.log('✅ [API Route] Forwarding thread_id to backend:', thread_id);
     } else {

@@ -5,6 +5,7 @@ import Navbar from "@/app/components/navigation/Navbar";
 import { SettingsProvider } from './context/SettingsContext';
 import { ThemeProvider } from './context/ThemeProvider';
 import { Toaster } from "@/app/components/ui/toaster";
+import SessionProvider from "@/app/components/providers/SessionProvider";
 
 // We deliberately avoid `next/font/google` so the docker build doesn't need
 // outbound access to fonts.googleapis.com at build time. The system font
@@ -27,17 +28,19 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="font-sans" suppressHydrationWarning={true}>
-        <SettingsProvider>
-          <ThemeProvider>
-            <div className="relative h-screen flex flex-col overflow-hidden">
-              <Navbar />
-              <main className="flex-1 relative overflow-hidden">
-                {children}
-              </main>
-              <Toaster />
-            </div>
-          </ThemeProvider>
-        </SettingsProvider>
+        <SessionProvider>
+          <SettingsProvider>
+            <ThemeProvider>
+              <div className="relative h-screen flex flex-col overflow-hidden">
+                <Navbar />
+                <main className="flex-1 relative overflow-hidden">
+                  {children}
+                </main>
+                <Toaster />
+              </div>
+            </ThemeProvider>
+          </SettingsProvider>
+        </SessionProvider>
       </body>
     </html>
   );

@@ -14,6 +14,7 @@
 
 import { MongoClient, Db } from 'mongodb';
 import dns from 'dns';
+import { METADATA_COLLECTION, SOURCES_COLLECTION } from '@/app/lib/collection-names';
 
 try {
   dns.setDefaultResultOrder('ipv4first');
@@ -35,15 +36,7 @@ export const MONGODB_MODE: 'local' | 'external' =
     ? 'external'
     : 'local';
 
-// Name of the merged per-source corpus collection. Read from either of two
-// env var names so older deployments that still set MONGODB_SOURCES_COLLECTION
-// keep working transparently.
-export const SOURCES_COLLECTION =
-  process.env.MONGODB_CORPUS_COLLECTION ||
-  process.env.MONGODB_SOURCES_COLLECTION ||
-  'sources';
-export const METADATA_COLLECTION =
-  process.env.MONGODB_METADATA_COLLECTION || 'metadata_records';
+export { SOURCES_COLLECTION, METADATA_COLLECTION };
 
 declare global {
   // eslint-disable-next-line no-var
@@ -62,6 +55,24 @@ if (!global._mongoClientPromise) {
 
 const clientPromise: Promise<MongoClient> = global._mongoClientPromise as Promise<MongoClient>;
 
+let userIndexesReady = false;
+
+async function ensureUserDataIndexes(db: Db): Promise<void> {
+  if (userIndexesReady) return;
+  try {
+    await Promise.all([
+      db.collection("chat_threads").createIndex({ user_id: 1, status: 1, updated_at: -1 }),
+      db.collection("user_uploaded_sources").createIndex({ user_id: 1, prefix: 1 }),
+      db.collection("user_settings").createIndex({ user_id: 1 }),
+      db.collection("chat_message_feedbacks").createIndex({ user_id: 1, message_id: 1 }),
+      db.collection(METADATA_COLLECTION).createIndex({ user_id: 1, collection_name: 1 }),
+    ]);
+    userIndexesReady = true;
+  } catch (error) {
+    console.error("Failed to ensure user-data indexes:", error);
+  }
+}
+
 export interface AxiaDbHandles {
   db: Db;
   sources: ReturnType<Db['collection']>;
@@ -75,6 +86,7 @@ export interface AxiaDbHandles {
 export async function connectToMongoDB(): Promise<AxiaDbHandles> {
   const client = await clientPromise;
   const db = client.db(MONGODB_DB);
+  await ensureUserDataIndexes(db);
   return {
     db,
     sources: db.collection(SOURCES_COLLECTION),

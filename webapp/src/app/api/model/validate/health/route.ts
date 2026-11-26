@@ -1,8 +1,26 @@
 // app/api/model/validate/health/route.ts
 import { NextRequest, NextResponse } from 'next/server';
+import { requireUserId } from '@/app/lib/authz';
+import {
+  CUSTOM_MODEL_URL_DISABLED_MESSAGE,
+  customModelUrlsAllowed,
+} from '@/app/lib/model-url';
 
 export async function POST(request: NextRequest) {
   try {
+    const authz = await requireUserId();
+    if ('error' in authz) return authz.error;
+
+    // This fetches `${apiUrl}/health` from inside the server, so a free-form
+    // URL is a server-side request forgery primitive. Same gate as the routes
+    // that forward model URLs.
+    if (!customModelUrlsAllowed()) {
+      return NextResponse.json(
+        { message: CUSTOM_MODEL_URL_DISABLED_MESSAGE, isValid: false },
+        { status: 403 },
+      );
+    }
+
     const body = await request.json();
     const { apiUrl, modelType } = body;
 

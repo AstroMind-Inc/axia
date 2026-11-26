@@ -160,7 +160,7 @@ export function ChatHistoryProvider({ children }: ChatHistoryProviderProps) {
             title: 'New Chat', // Will be updated by backend
             created_at: new Date(),
             updated_at: new Date(),
-            user_id: 'default_user',
+            user_id: '',
             status: 'active',
             metadata: {
               total_messages: 0,

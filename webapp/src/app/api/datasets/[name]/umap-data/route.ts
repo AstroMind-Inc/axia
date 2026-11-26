@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToMongoDB } from '@/app/lib/mongodb';
+import { canAccessCollection, requireUserId } from '@/app/lib/authz';
 
 interface RouteParams {
   params: Promise<{
@@ -9,6 +10,9 @@ interface RouteParams {
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
+    const authz = await requireUserId();
+    if ('error' in authz) return authz.error;
+
     const resolvedParams = await params;
     const fileName = resolvedParams.name;
     const url = new URL(request.url);
@@ -22,6 +26,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     }
 
     const { dataDb } = await connectToMongoDB();
+
+    if (!(await canAccessCollection(dataDb, fileName, authz.userId))) {
+      return NextResponse.json({ message: 'Not found' }, { status: 404 });
+    }
 
     // Build the projection with all the new fields
     const projection = {

@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server';
 import { connectToMongoDB } from '@/app/lib/mongodb';
+import { requireUserId } from '@/app/lib/authz';
 
 export async function GET() {
   try {
+    const authz = await requireUserId();
+    if ('error' in authz) return authz.error;
+
     const { appDb } = await connectToMongoDB();
     const result = await appDb.collection('source_data')
       .findOne({'key': 'source_fields'}, {

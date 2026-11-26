@@ -1,8 +1,13 @@
 import { NextResponse } from 'next/server';
 import { requestEmbeddings } from '@/app/lib/embeddings';
+import { requireUserId } from '@/app/lib/authz';
+import { forwardableModelUrl } from '@/app/lib/model-url';
 
 export async function POST(request: Request) {
   try {
+    const authz = await requireUserId();
+    if ('error' in authz) return authz.error;
+
     console.log('🔥 Embeddings API called');
     const body = await request.json();
     const { event_list, model_api_url, is_pruned } = body;
@@ -21,7 +26,11 @@ export async function POST(request: Request) {
       }, { status: 400 });
     }
 
-    const result = await requestEmbeddings({ event_list, model_api_url, is_pruned });
+    const result = await requestEmbeddings({
+      event_list,
+      model_api_url: forwardableModelUrl(model_api_url),
+      is_pruned,
+    });
     return NextResponse.json(result.body, { status: result.status });
 
   } catch (error) {

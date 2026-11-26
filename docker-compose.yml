@@ -121,6 +121,7 @@ services:
       # Server-side (used by API routes running in Node)
       SERVICE_URL: http://service:8000
       MODEL_SERVER_URL: ${MODEL_SERVER_URL:-}
+      ALLOW_CUSTOM_MODEL_URL: ${ALLOW_CUSTOM_MODEL_URL:-false}
       PROJECTOR_URL: http://projector:8001
       MONGODB_URI: ${MONGODB_URI:-mongodb://mongo:27017}
       MONGODB_DB: ${MONGODB_DB:-axia}
@@ -134,6 +135,11 @@ services:
       NEXT_PUBLIC_MONGODB_DB: ${NEXT_PUBLIC_MONGODB_DB:-axia}
       NEXT_PUBLIC_MONGODB_MODE: ${NEXT_PUBLIC_MONGODB_MODE:-local}
       NEXT_PUBLIC_DEBUG: ${NEXT_PUBLIC_DEBUG:-false}
+      AUTH_SECRET: ${AUTH_SECRET:-}
+      AUTH_GOOGLE_ID: ${AUTH_GOOGLE_ID:-}
+      AUTH_GOOGLE_SECRET: ${AUTH_GOOGLE_SECRET:-}
+      AUTH_URL: ${AUTH_URL:-http://localhost:3000}
+      AUTH_TRUST_HOST: ${AUTH_TRUST_HOST:-true}
     depends_on:
       service:
         condition: service_healthy
