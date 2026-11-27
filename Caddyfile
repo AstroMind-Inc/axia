@@ -2,15 +2,36 @@
 	# FastAPI is reachable from the webapp over the docker network
 	# (SERVICE_URL=http://service:8000). Do not proxy it publicly — that
 	# would bypass Google auth on the Next.js API routes.
+
+	# Next.js route handlers buffer whole request bodies in memory, so an
+	# unbounded body is a one-request way to exhaust the webapp's memory.
+	# 50 MB covers the largest legitimate dataset uploads.
+	request_body {
+		max_size 50MB
+	}
+
+	# Sign-in is enforced in Next.js middleware. This header is internal to
+	# Next and was the vector for CVE-2025-29927 (middleware bypass); the
+	# running version is patched, but no client ever needs to send it.
+	request_header -x-middleware-subrequest
+
 	reverse_proxy webapp:3000
 
 	encode gzip zstd
 
 	header {
+		# No includeSubDomains: other *.astromind.com hosts are not ours to pin.
+		Strict-Transport-Security "max-age=31536000"
 		X-Content-Type-Options nosniff
 		X-Frame-Options DENY
 		Referrer-Policy strict-origin-when-cross-origin
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+		# Defence in depth that cannot break the app: no framing, no plugins,
+		# no <base> hijacking. A script-src policy would need per-request
+		# nonces from Next.js and is left for later.
+		Content-Security-Policy "frame-ancestors 'none'; object-src 'none'; base-uri 'self'"
 		-Server
+		-X-Powered-By
 	}
 
 	log {

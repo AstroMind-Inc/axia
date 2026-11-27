@@ -39,6 +39,15 @@ git -C "$INSTALL_DIR" rev-parse --git-dir >/dev/null 2>&1 || die "$INSTALL_DIR i
 cd "$INSTALL_DIR"
 [[ -f .env ]] || die "$INSTALL_DIR/.env is missing. Production config lives there and is never in git."
 
+# .env holds every production secret (Google client secret, AUTH_SECRET,
+# OpenAI key). Created with `cp`/`nano` it is world-readable, so any local
+# account or compromised process on the host could read it.
+if [[ "$(stat -c '%a' .env 2>/dev/null || stat -f '%Lp' .env)" != "600" ]]; then
+    chmod 600 .env
+    chown root:root .env 2>/dev/null || true
+    ok "tightened .env permissions to 600 (owner only)"
+fi
+
 # Every page and API route requires Google sign-in. Without these the new
 # containers would come up unable to sign anyone in (or fail every request
 # for want of a session secret), after the old ones were already stopped.
@@ -127,6 +136,48 @@ else
     ok "stack brought up with docker compose"
 fi
 trap - ERR
+
+# ── Autoheal (host timer, replaces the autoheal container) ───────────────────
+# The old autoheal container held the Docker socket, which is root on the
+# host. It is no longer in the compose files, so `compose down/up` leaves it
+# running as an orphan; remove it explicitly. It is stateless.
+if docker inspect axia-autoheal >/dev/null 2>&1; then
+    docker rm -f axia-autoheal >/dev/null
+    ok "removed the retired axia-autoheal container (it held the Docker socket)"
+fi
+install_autoheal_timer() {
+    local svc=/etc/systemd/system/axia-autoheal.service
+    local tmr=/etc/systemd/system/axia-autoheal.timer
+    local svc_body tmr_body
+    svc_body="[Unit]
+Description=Axia: restart unhealthy containers
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/env bash ${INSTALL_DIR}/scripts/autoheal.sh"
+    tmr_body="[Unit]
+Description=Axia: check container health every 30 seconds
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=30s
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target"
+    if [[ "$(cat "$svc" 2>/dev/null)" != "$svc_body" || "$(cat "$tmr" 2>/dev/null)" != "$tmr_body" ]]; then
+        printf '%s\n' "$svc_body" > "$svc"
+        printf '%s\n' "$tmr_body" > "$tmr"
+        systemctl daemon-reload
+    fi
+    systemctl enable --now axia-autoheal.timer >/dev/null 2>&1
+}
+if command -v systemctl >/dev/null 2>&1 && install_autoheal_timer; then
+    ok "autoheal timer active (axia-autoheal.timer)"
+else
+    warn "could not install axia-autoheal.timer; unhealthy containers will not be restarted automatically"
+fi
 
 # ── Verify ───────────────────────────────────────────────────────────────────
 echo ""

@@ -14,12 +14,11 @@ LEAKY_VARS := \
 	MODEL_SERVER_URL PROJECTOR_URL PROJECTOR_PORT HF_REPO_ID \
 	MONGODB_URI MONGODB_DB MONGODB_MODE \
 	MONGODB_CORPUS_COLLECTION MONGODB_METADATA_COLLECTION \
-	NEXT_PUBLIC_API_URL NEXT_PUBLIC_MONGODB_URI NEXT_PUBLIC_MONGODB_DB \
-	NEXT_PUBLIC_MONGODB_MODE NEXT_PUBLIC_DEBUG NEXT_PUBLIC_ALLOWED_FILE_TYPES \
+	NEXT_PUBLIC_API_URL NEXT_PUBLIC_DEBUG NEXT_PUBLIC_ALLOWED_FILE_TYPES \
 	SERVICE_HOST SERVICE_PORT SERVICE_LOG_LEVEL SERVICE_DEBUG \
 	WEBAPP_PORT \
 	AUTH_SECRET AUTH_GOOGLE_ID AUTH_GOOGLE_SECRET AUTH_URL AUTH_TRUST_HOST \
-	ALLOW_CUSTOM_MODEL_URL \
+	ALLOW_CUSTOM_MODEL_URL MODEL_SERVER_TOKEN HF_TOKEN \
 	DOMAIN
 
 ENV_PREFIX := env $(foreach v,$(LEAKY_VARS),-u $(v))
@@ -192,19 +191,19 @@ clean-data: ## DESTRUCTIVE: drop containers AND mongo volume
 	@$(ENV_PREFIX) $(DC) $(PROFILE_FLAG) down -v
 
 # ----------------------------------------------------------------------------
-# Production (Caddy + autoheal + systemd)
+# Production (Caddy + systemd; autoheal is a host timer, see prod-update)
 # ----------------------------------------------------------------------------
 
 DC_PROD := $(DC) -f docker-compose.yml -f docker-compose.prod.yml $(PROFILE_FLAG)
 
-prod-up: $(ENV_FILE) ## Start production stack (Caddy HTTPS + autoheal + all services)
+prod-up: $(ENV_FILE) ## Start production stack (Caddy HTTPS + all services)
 	@$(ENV_PREFIX) $(DC_PROD) up -d --build
 	@DOMAIN=$$(grep -E '^DOMAIN=' $(ENV_FILE) | cut -d= -f2 | tr -d '"'); \
 		echo ""; \
 		echo "Production stack starting."; \
 		echo "  URL: https://$${DOMAIN:-localhost}"; \
 		echo ""; \
-		echo "Autoheal is monitoring all containers."; \
+		echo "Unhealthy containers are restarted by axia-autoheal.timer (installed by 'sudo make prod-update')."; \
 		echo "Tail logs with: make prod-logs"
 
 prod-down: ## Stop the production stack
