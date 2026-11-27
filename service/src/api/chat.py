@@ -21,6 +21,8 @@ from fastapi.responses import StreamingResponse
 
 from src.agents.infer import generate_multi_agent_response
 from src.api._task_manager import get_background_task_manager
+from src.api.limits import check_event_list, check_source, check_sources
+from src.api.model_url import effective_model_url
 from src.api.models import (
     ChatMessage,
     ChatRequest,
@@ -34,6 +36,11 @@ from src.llm.qwen_xray_client import generate_embeddings
 router = APIRouter()
 logger = get_logger(__name__)
 settings = get_settings()
+
+# Bounds how many multi-agent runs execute at once across all users. A run
+# keeps going after its client disconnects, so without this a client could
+# start runs faster than they finish and pile up OpenAI spend and memory.
+_workflow_slots = asyncio.Semaphore(max(1, settings.max_concurrent_workflows))
 
 
 # ---------------------------------------------------------------------------
@@ -75,7 +82,7 @@ async def _run_workflow_background(request_id: str, request: ChatRequest, histor
             data_obj=request.data_obj,
             history=history,
             event_list=request.event_list,
-            model_api_url=request.model_api_url or settings.model_server_url,
+            model_api_url=effective_model_url(request.model_api_url, settings.model_server_url),
             neighbors=request.neighbors,
             openai_model=request.openai_model,
             response_format=request.response_format,
@@ -101,11 +108,15 @@ async def _run_workflow_background(request_id: str, request: ChatRequest, histor
         )
     except Exception as e:  # noqa: BLE001
         logger.error("Workflow failed for request %s: %s", request_id, e, exc_info=True)
+        # The exception text can carry internal hostnames and upstream error
+        # bodies; it goes to the log, not to the client.
         await task_manager.put_update(
             request_id,
-            {"type": "error", "message": f"Workflow failed: {e}", "error": str(e)},
+            {"type": "error", "message": "The analysis failed. Please try again.", "error": "workflow_failed"},
             timeout=0.5,
         )
+    finally:
+        _workflow_slots.release()
 
 
 # ---------------------------------------------------------------------------
@@ -133,17 +144,32 @@ async def process_streaming_chat_request(request: ChatRequest) -> AsyncGenerator
         }
         return
 
+    if _workflow_slots.locked():
+        yield {
+            "type": "error",
+            "message": "The server is busy with other analyses. Please try again in a minute.",
+            "error": "busy",
+        }
+        return
+    await _workflow_slots.acquire()
+
     request_id = str(uuid4())
     history = list(request.history) if request.history else []
     if not history or history[-1].role != "user":
         history.append(ChatMessage(role="user", content=request.message))
 
-    task_manager.create_workflow_queue(request_id)
-    task_manager.start_background_task(
-        request_id,
-        _run_workflow_background(request_id, request, history),
-        cleanup_on_complete=True,
-    )
+    try:
+        task_manager.create_workflow_queue(request_id)
+        task_manager.start_background_task(
+            request_id,
+            _run_workflow_background(request_id, request, history),
+            cleanup_on_complete=True,
+        )
+    except BaseException:
+        # The background task releases the slot when it finishes; if it was
+        # never started, release it here instead.
+        _workflow_slots.release()
+        raise
 
     yield {"type": "init", "request_id": request_id, "message": "Background workflow started"}
 
@@ -174,6 +200,10 @@ async def process_streaming_chat_request(request: ChatRequest) -> AsyncGenerator
 async def chat_stream(request: ChatRequest):
     """Server-sent stream of multi-agent updates."""
 
+    check_event_list(request.event_list, "event_list")
+    check_source(request.data_obj, "data_obj")
+    check_sources(request.neighbors, "neighbors")
+
     async def generate():
         try:
             async for update in process_streaming_chat_request(request):
@@ -181,7 +211,7 @@ async def chat_stream(request: ChatRequest):
             yield f"data: {json.dumps({'type': 'complete'})}\n\n"
         except Exception as e:  # noqa: BLE001
             logger.error("Streaming chat failed: %s", e, exc_info=True)
-            yield f"data: {json.dumps({'type': 'error', 'message': str(e), 'error': str(e)})}\n\n"
+            yield f"data: {json.dumps({'type': 'error', 'message': 'The analysis failed. Please try again.', 'error': 'stream_failed'})}\n\n"
 
     return StreamingResponse(
         generate(),
@@ -189,8 +219,6 @@ async def chat_stream(request: ChatRequest):
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Headers": "Cache-Control",
         },
     )
 
@@ -199,7 +227,8 @@ async def chat_stream(request: ChatRequest):
 async def generate_embeddings_route(request: EmbeddingsRequest):
     """Project an event_list to (pca_64d, umap_2d) via the projector (or model server)."""
 
-    model_url = request.model_api_url or settings.embedding_url
+    check_event_list(request.event_list, "event_list")
+    model_url = effective_model_url(request.model_api_url, settings.embedding_url)
     if not model_url:
         return EmbeddingsResponse(
             error="No projector or model server is configured; embedding generation is disabled.",

@@ -1,11 +1,12 @@
 """Validation router — POST /v1/validate."""
 
 import traceback
-from typing import Any, Dict, List, Optional
+from typing import Annotated, Any, Dict, List, Optional
 
 from fastapi import APIRouter, Body
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
+from src.api.limits import MAX_HISTORY_CHARS, MAX_MESSAGE_CHARS
 from src.core.logger import get_logger
 from src.llm.validate import validate_with_openai
 
@@ -21,10 +22,12 @@ class SourceContext(BaseModel):
 
 
 class ValidationRequest(BaseModel):
-    sourceId: Optional[str] = None
-    userMessage: Optional[str] = None
-    answer: str
-    context: Optional[List[str]] = None
+    sourceId: Optional[str] = Field(None, max_length=200)
+    userMessage: Optional[str] = Field(None, max_length=MAX_MESSAGE_CHARS)
+    answer: str = Field(..., max_length=MAX_HISTORY_CHARS)
+    context: Optional[List[Annotated[str, Field(max_length=MAX_MESSAGE_CHARS)]]] = Field(
+        None, max_length=20
+    )
     source_context: Optional[SourceContext] = None
 
 
@@ -78,6 +81,6 @@ async def validate(request: ValidationRequest = Body(...)):
         logger.error("Validation failed: %s", e)
         logger.error(traceback.format_exc())
         return ValidationResponse(
-            result={"error": f"**Error**: Failed to validate.\n\n{e}"},
-            api_call_details={"error": str(e)},
+            result={"error": "**Error**: Failed to validate. Please try again."},
+            api_call_details={"error": "validation_failed"},
         )

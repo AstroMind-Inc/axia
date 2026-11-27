@@ -8,22 +8,22 @@ package-mode = false
 
 [tool.poetry.dependencies]
 python = "^3.11"
-fastapi = "^0.115.0"
+fastapi = "^0.165.0"
 uvicorn = {extras = ["standard"], version = "^0.32.0"}
-python-multipart = "^0.0.9"
+python-multipart = "^0.0.31"
 pydantic = "^2.7.0"
 pydantic-settings = "^2.5.0"
-python-dotenv = "^1.0.1"
+python-dotenv = "^1.2.2"
 python-json-logger = "^2.0.7"
 loguru = "^0.7.2"
 
 # Mongo
-pymongo = "^4.10.0"
+pymongo = "^4.18.3"
 
 # HTTP
-aiohttp = "^3.10.0"
+aiohttp = "^3.14.4"
 httpx = "^0.27.0"
-requests = "^2.32.0"
+requests = "^2.33.0"
 tenacity = "^9.0.0"
 
 # OpenAI

@@ -5,6 +5,7 @@ Object details controller for enhanced object information processing.
 from fastapi import APIRouter
 from typing import Dict, Any
 
+from src.api.limits import check_source
 from src.api.models import ObjectDetailsRequest, ObjectDetailsResponse, LightCurveData
 from src.core.logger import get_logger
 from src.spectrum.snapshot import make_spectrum_snapshot, create_light_curve_data, create_time_light_curve_data, create_gl_light_curve_data, render_spectrum_text
@@ -14,8 +15,12 @@ router = APIRouter()
 logger = get_logger(__name__)
 
 
+# A plain `def`, not `async def`: the analysis below is CPU-bound numpy work
+# with nothing to await. As a coroutine it ran on the event loop and froze
+# every other request (including chat streams) until it finished; FastAPI
+# runs a plain function in its worker threadpool instead.
 @router.post("/object-details-enhanced", response_model=ObjectDetailsResponse)
-async def process_object_details_enhanced(request: ObjectDetailsRequest):
+def process_object_details_enhanced(request: ObjectDetailsRequest):
     """
     Process object data to generate enhanced details including light curve and spectrum analysis.
     
@@ -25,6 +30,7 @@ async def process_object_details_enhanced(request: ObjectDetailsRequest):
     Returns:
         Enhanced object details with light curve data
     """
+    check_source(request.object_data, "object_data")
     try:
         obj_data = request.object_data
         obj_id = obj_data.get('_id', 'unknown')
@@ -133,5 +139,5 @@ async def process_object_details_enhanced(request: ObjectDetailsRequest):
         logger.error(f"Error processing enhanced object details: {str(e)}")
         return ObjectDetailsResponse(
             success=False,
-            error=f"Failed to process object details: {str(e)}"
+            error="Failed to process object details."
         )

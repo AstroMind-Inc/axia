@@ -3,7 +3,13 @@
 import math
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator, validator
+
+from src.api.limits import (
+    MAX_HISTORY_CHARS,
+    MAX_HISTORY_MESSAGES,
+    MAX_MESSAGE_CHARS,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -12,7 +18,7 @@ from pydantic import BaseModel, Field, validator
 
 class ChatMessage(BaseModel):
     role: Literal["user", "assistant"]
-    content: str
+    content: str = Field(..., max_length=MAX_MESSAGE_CHARS * 2)
 
 
 class ContextSettings(BaseModel):
@@ -38,8 +44,8 @@ class AgentConfig(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    message: str
-    history: List[ChatMessage]
+    message: str = Field(..., max_length=MAX_MESSAGE_CHARS)
+    history: List[ChatMessage] = Field(..., max_length=MAX_HISTORY_MESSAGES)
     model: str
     response_format: str
     openai_model: Optional[str] = None
@@ -48,11 +54,19 @@ class ChatRequest(BaseModel):
     data_obj: Optional[Dict[str, Any]] = None
     neighbors: Optional[List[Dict[str, Any]]] = None
     context_settings: Optional[ContextSettings] = None
+    # Honoured only when ALLOW_CUSTOM_MODEL_URL=true (see src/api/model_url.py).
     model_api_url: Optional[str] = None
-    max_new_tokens: Optional[int] = 500
+    max_new_tokens: Optional[int] = Field(500, ge=1, le=2048)
     temperature: Optional[float] = 0.8
     thread_id: Optional[str] = None
     agent_config: Optional[AgentConfig] = None
+
+    @field_validator("history")
+    @classmethod
+    def _bound_history_size(cls, v: List[ChatMessage]) -> List[ChatMessage]:
+        if sum(len(m.content) for m in v) > MAX_HISTORY_CHARS:
+            raise ValueError(f"history exceeds {MAX_HISTORY_CHARS} characters in total")
+        return v
 
     class Config:
         populate_by_name = True
@@ -119,6 +133,7 @@ class ChatResponse(BaseModel):
 
 class EmbeddingsRequest(BaseModel):
     event_list: List[List[float]]
+    # Honoured only when ALLOW_CUSTOM_MODEL_URL=true (see src/api/model_url.py).
     model_api_url: Optional[str] = None
     is_pruned: Optional[bool] = False
 

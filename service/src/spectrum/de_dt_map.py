@@ -6,7 +6,10 @@ The dE-dt map reveals spectral evolution over time without binning artifacts.
 """
 
 import numpy as np
-import matplotlib.pyplot as plt
+import matplotlib
+
+matplotlib.use("Agg")  # headless; also safe off the main thread
+import matplotlib.pyplot as plt  # noqa: E402
 from matplotlib.colors import LogNorm
 import base64
 from io import BytesIO

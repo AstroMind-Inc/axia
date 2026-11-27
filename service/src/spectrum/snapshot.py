@@ -1727,6 +1727,12 @@ def bin_light_curve(
     return out
 
 
+# Upper bound on N_events x N_freqs for one Rayleigh scan, and on the size
+# of each intermediate phase matrix (about 32 MB of float64).
+_RAYLEIGH_MAX_WORK = 100_000_000
+_RAYLEIGH_CHUNK_ELEMENTS = 4_000_000
+
+
 def rayleigh_periodogram(
     times_s: np.ndarray,
     period_range_s: Tuple[float, float] = (100.0, 10000.0),
@@ -1766,10 +1772,23 @@ def rayleigh_periodogram(
         result["note"] = "Bad frequency grid; not computed."
         return result
 
+    # The direct scan costs N_events x N_freqs, and N_freqs grows with the
+    # observation span. Both come from the request, so bound the work: past
+    # the budget the grid is coarsened, and
+    # the sums are taken in chunks so memory stays flat whatever the size.
+    n_freqs = int((fmax - fmin) / df) + 1
+    if N * n_freqs > _RAYLEIGH_MAX_WORK:
+        coarsen = math.ceil(N * n_freqs / _RAYLEIGH_MAX_WORK)
+        df = df * coarsen
+        result["note"] = "Frequency grid coarsened to bound computation."
     freqs = np.arange(fmin, fmax + df, df, dtype=float)
-    phi = 2.0 * np.pi * np.outer(t, freqs)
-    C = np.sum(np.cos(phi), axis=0)
-    S = np.sum(np.sin(phi), axis=0)
+    C = np.empty(freqs.size)
+    S = np.empty(freqs.size)
+    chunk = max(1, _RAYLEIGH_CHUNK_ELEMENTS // max(1, N))
+    for start in range(0, freqs.size, chunk):
+        phi = 2.0 * np.pi * np.outer(t, freqs[start:start + chunk])
+        C[start:start + chunk] = np.cos(phi).sum(axis=0)
+        S[start:start + chunk] = np.sin(phi).sum(axis=0)
     Z1sq = (2.0 / N) * (C**2 + S**2)
 
     p_single = np.exp(-0.5 * Z1sq)
@@ -1799,7 +1818,7 @@ def rayleigh_periodogram(
             "T_span_s": T,
             "M_trials": int(M)
         },
-        "note": ""
+        "note": result["note"]
     })
     return result
 

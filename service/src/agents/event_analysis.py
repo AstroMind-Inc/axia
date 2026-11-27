@@ -26,7 +26,7 @@ async def call_event_analysis(
         Analysis result from the specialized event model
     """
     try:
-        print(f"DEBUG: Calling event analysis with prompt: '{prompt}'")
+        print("DEBUG: Calling event analysis")
         
         # Call the qwen-7b-raw-xray-event model
         result, _ = await generate_response(
@@ -38,7 +38,7 @@ async def call_event_analysis(
             temperature=temperature
         )
         
-        print(f"DEBUG: Event analysis response: {result[:200]}...")
+        print(f"DEBUG: Event analysis response received ({len(result)} chars)")
         return result
     except Exception as e:
         error_msg = f"Error in event analysis: {str(e)}"
