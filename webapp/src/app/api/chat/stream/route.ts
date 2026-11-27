@@ -4,11 +4,15 @@ import { getServiceUrl } from '@/app/lib/service-url';
 import { connectToMongoDB } from '@/app/lib/mongodb';
 import { findOwnedThread, notFound, requireUserId } from '@/app/lib/authz';
 import { forwardableModelUrl } from '@/app/lib/model-url';
+import { rateLimit } from '@/app/lib/rate-limit';
+import { MAX_MESSAGE_CHARS, trimHistory } from '@/app/lib/chat-limits';
 
 export async function POST(request: Request) {
   try {
     const authz = await requireUserId();
     if ('error' in authz) return authz.error;
+    const limited = rateLimit(authz.userId, 'analysis');
+    if (limited) return limited;
 
     const body = await request.json();
     const {
@@ -32,6 +36,13 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { message: 'Missing required fields' },
         { status: 400 }
+      );
+    }
+
+    if (typeof message !== 'string' || message.length > MAX_MESSAGE_CHARS) {
+      return NextResponse.json(
+        { message: `Messages are limited to ${MAX_MESSAGE_CHARS} characters.` },
+        { status: 413 }
       );
     }
 
@@ -66,7 +77,7 @@ export async function POST(request: Request) {
       };
     } = {
       message,
-      history,
+      history: trimHistory(history),
       model,
       response_format,
       context_settings: context_settings || null,
@@ -139,10 +150,13 @@ export async function POST(request: Request) {
     if (!response.ok) {
       const errorText = await response.text();
       console.error('Backend streaming error:', response.status, errorText);
-      return NextResponse.json(
-        { message: `Backend error: ${errorText}` },
-        { status: response.status }
-      );
+      // 413/422 mean the request was too large or malformed; anything else
+      // is an internal failure whose text is not for the client.
+      const message =
+        response.status === 413 || response.status === 422
+          ? 'The request is too large or malformed.'
+          : 'The analysis service failed. Please try again.';
+      return NextResponse.json({ message }, { status: response.status });
     }
 
     // Return the streaming response from backend
@@ -152,15 +166,13 @@ export async function POST(request: Request) {
         'Content-Type': 'text/plain',
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'Cache-Control',
       },
     });
 
   } catch (error) {
     console.error('Streaming API error:', error);
     return NextResponse.json(
-      { message: `Streaming API error: ${error instanceof Error ? error.message : 'Unknown error'}` },
+      { message: 'Streaming API error' },
       { status: 500 }
     );
   }

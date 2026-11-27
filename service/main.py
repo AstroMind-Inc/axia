@@ -4,6 +4,7 @@ object-details routers.
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from src.api.chat import router as chat_router
 from src.api.object_details import router as object_details_router
@@ -19,16 +20,22 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 settings = get_settings()
 logger = setup_logger()
+
+# The service has no authentication, so it must not be callable from web
+# pages. A wildcard origin with credentials made any website able to drive a
+# developer's local service (spending their OpenAI key). In production only
+# the webapp's server calls it, which needs no CORS at all.
+_cors_origins = [o.strip() for o in settings.cors_allow_origins.split(",") if o.strip()]
+if _cors_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_cors_origins,
+        allow_credentials=False,
+        allow_methods=["GET", "POST"],
+        allow_headers=["Content-Type"],
+    )
 
 
 @app.on_event("startup")
@@ -68,11 +75,15 @@ app.include_router(validate_router, prefix="/v1", tags=["validate"])
 
 @app.exception_handler(HTTPException)
 async def custom_http_exception_handler(request, exc):  # noqa: D401
-    return {
-        "message": str(exc.detail),
-        "code": exc.status_code,
-        "details": getattr(exc, "details", None),
-    }
+    # Must return a Response: returning a dict made every HTTPException a 500.
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "message": str(exc.detail),
+            "code": exc.status_code,
+            "details": getattr(exc, "details", None),
+        },
+    )
 
 
 if __name__ == "__main__":

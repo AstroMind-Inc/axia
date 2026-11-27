@@ -43,6 +43,22 @@ class Settings(BaseSettings):
         description="URL of the fine-tuned model server. If empty, Event Analyst is disabled.",
     )
 
+    model_server_token: Optional[str] = Field(
+        None,
+        description=(
+            "Shared secret sent as a bearer token to the model server and the "
+            "projector. Set the same value as MODEL_SERVER_TOKEN on the model "
+            "server so it rejects anyone else."
+        ),
+    )
+    allow_custom_model_url: bool = Field(
+        False,
+        description=(
+            "Honour a client-supplied model_api_url. Off by default: on a shared "
+            "deployment it lets any caller make the service send requests anywhere."
+        ),
+    )
+
     # CPU projector server (for embeddings without the LLM) -------------------
     projector_url: Optional[str] = Field(
         None,
@@ -86,6 +102,21 @@ class Settings(BaseSettings):
         return v
 
     # Service runtime --------------------------------------------------------
+    max_concurrent_workflows: int = Field(
+        8,
+        description=(
+            "Multi-agent runs allowed at once across all users. Each run makes "
+            "several OpenAI calls, so this bounds both load and spend."
+        ),
+    )
+    cors_allow_origins: str = Field(
+        "",
+        description=(
+            "Comma-separated browser origins allowed to call the service directly. "
+            "Empty (the default) disables CORS: in production only the webapp's "
+            "server calls the service."
+        ),
+    )
     service_host: str = Field("0.0.0.0")
     service_port: int = Field(8000)
     service_log_level: str = Field("info")

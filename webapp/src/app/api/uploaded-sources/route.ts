@@ -3,6 +3,12 @@ import { connectToMongoDB } from '@/app/lib/mongodb';
 import { requestEmbeddings } from '@/app/lib/embeddings';
 import { requireUserId } from '@/app/lib/authz';
 import { forwardableModelUrl } from '@/app/lib/model-url';
+import {
+  MAX_NAME_LENGTH,
+  MAX_OBJECTS_PER_SOURCE_SET,
+  MAX_UPLOADED_SOURCE_SETS_PER_USER,
+} from '@/app/lib/upload-limits';
+import { rateLimit } from '@/app/lib/rate-limit';
 
 const COLLECTION_NAME = 'user_uploaded_sources';
 
@@ -53,7 +59,7 @@ export async function GET() {
     return NextResponse.json(
       { 
         success: false, 
-        error: error instanceof Error ? error.message : 'Failed to load uploaded sources' 
+        error: 'Failed to load uploaded sources' 
       },
       { status: 500 }
     );
@@ -65,11 +71,19 @@ export async function POST(request: NextRequest) {
   try {
     const authz = await requireUserId();
     if ('error' in authz) return authz.error;
+    const limited = rateLimit(authz.userId, 'upload');
+    if (limited) return limited;
 
     const body = await request.json();
     const { objects, prefix, model_api_url, is_pruned } = body;
 
-    if (!objects || !Array.isArray(objects) || !prefix) {
+    if (
+      !objects ||
+      !Array.isArray(objects) ||
+      typeof prefix !== 'string' ||
+      !prefix ||
+      prefix.length > MAX_NAME_LENGTH
+    ) {
       return NextResponse.json(
         { 
           success: false, 
@@ -79,8 +93,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (objects.length > MAX_OBJECTS_PER_SOURCE_SET) {
+      return NextResponse.json(
+        { success: false, error: `At most ${MAX_OBJECTS_PER_SOURCE_SET} objects can be uploaded at once.` },
+        { status: 413 }
+      );
+    }
+
     const { appDb } = await connectToMongoDB();
     const collection = appDb.collection(COLLECTION_NAME);
+
+    if ((await collection.countDocuments({ user_id: authz.userId })) >= MAX_UPLOADED_SOURCE_SETS_PER_USER) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `You can keep at most ${MAX_UPLOADED_SOURCE_SETS_PER_USER} uploaded sets. Delete one to upload another.`,
+        },
+        { status: 409 }
+      );
+    }
 
     // Check if prefix already exists
     const existingDataset = await collection.findOne({ prefix, user_id: authz.userId });
@@ -222,7 +253,7 @@ export async function POST(request: NextRequest) {
         } catch (error) {
           console.error(`❌ Error generating embeddings for object ${obj._id || obj.obsid || 'unknown'}:`, error);
           objDebug.embeddingStatus = 'exception';
-          objDebug.error = error instanceof Error ? error.message : String(error);
+          objDebug.error = 'Embedding generation failed';
           failedItems.push({ id: obj._id || obj.obsid || 'unknown', error: objDebug.error });
           // Continue to save object without embeddings
         }
@@ -264,7 +295,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       { 
         success: false, 
-        error: error instanceof Error ? error.message : 'Failed to save uploaded sources' 
+        error: 'Failed to save uploaded sources' 
       },
       { status: 500 }
     );
@@ -317,7 +348,7 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json(
       { 
         success: false, 
-        error: error instanceof Error ? error.message : 'Failed to delete uploaded sources' 
+        error: 'Failed to delete uploaded sources' 
       },
       { status: 500 }
     );

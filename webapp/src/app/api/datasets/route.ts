@@ -67,7 +67,7 @@ export async function GET() {
   } catch (error) {
     console.error('Error fetching datasets:', error);
     return NextResponse.json(
-      { message: error instanceof Error ? error.message : 'Internal server error' },
+      { message: 'Internal server error' },
       { status: 500 },
     );
   }

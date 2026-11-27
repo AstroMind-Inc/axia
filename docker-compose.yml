@@ -1,5 +1,15 @@
 name: axia
 
+# Published ports bind to 127.0.0.1 only. Nothing here has authentication of
+# its own (Mongo has no users, the FastAPI service and the projector have no
+# auth), and Docker-published ports bypass host firewalls such as ufw, so a
+# 0.0.0.0 binding would put them on the internet if this file were ever used
+# on a server without the production overlay.
+
+x-hardening: &hardening
+  security_opt:
+    - no-new-privileges:true
+
 services:
   # ---------------------------------------------------------------------------
   # MongoDB — only started when MONGODB_MODE=local (profile=local)
@@ -10,7 +20,7 @@ services:
     container_name: axia-mongo
     restart: unless-stopped
     ports:
-      - "27017:27017"
+      - "127.0.0.1:27017:27017"
     environment:
       MONGO_INITDB_DATABASE: ${MONGODB_DB:-axia}
     volumes:
@@ -51,12 +61,16 @@ services:
       dockerfile: Dockerfile
     container_name: axia-projector
     restart: unless-stopped
+    <<: *hardening
     ports:
-      - "${PROJECTOR_PORT:-8001}:8001"
+      - "127.0.0.1:${PROJECTOR_PORT:-8001}:8001"
     environment:
+      # The model repo is public, so no Hugging Face token is passed in. The
+      # documented HF_TOKEN is a write token for publishing; giving it to a
+      # container that processes user uploads would let a compromise of the
+      # projector push code to the org's Hugging Face repos.
       HF_REPO_ID: ${HF_REPO_ID:-astromindinc/axia-qwen-xray-7b}
       PROJECTOR_CACHE_DIR: /cache
-      HF_TOKEN: ${HF_TOKEN:-}
     volumes:
       - projector-cache:/cache
     healthcheck:
@@ -75,14 +89,17 @@ services:
       dockerfile: Dockerfile
     container_name: axia-service
     restart: unless-stopped
+    <<: *hardening
     ports:
-      - "${SERVICE_PORT:-8000}:8000"
+      - "127.0.0.1:${SERVICE_PORT:-8000}:8000"
     environment:
       MONGODB_URI: ${MONGODB_URI:-mongodb://mongo:27017}
       MONGODB_DB: ${MONGODB_DB:-axia}
       MONGODB_CORPUS_COLLECTION: ${MONGODB_CORPUS_COLLECTION:-sources}
       MONGODB_METADATA_COLLECTION: ${MONGODB_METADATA_COLLECTION:-metadata_records}
       MODEL_SERVER_URL: ${MODEL_SERVER_URL:-}
+      MODEL_SERVER_TOKEN: ${MODEL_SERVER_TOKEN:-}
+      ALLOW_CUSTOM_MODEL_URL: ${ALLOW_CUSTOM_MODEL_URL:-false}
       PROJECTOR_URL: http://projector:8001
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_DEFAULT_MODEL: ${OPENAI_DEFAULT_MODEL:-gpt-5.6-sol}
@@ -110,13 +127,11 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
-        NEXT_PUBLIC_MONGODB_URI: ${NEXT_PUBLIC_MONGODB_URI:-mongodb://localhost:27017}
-        NEXT_PUBLIC_MONGODB_DB: ${NEXT_PUBLIC_MONGODB_DB:-axia}
-        NEXT_PUBLIC_MONGODB_MODE: ${NEXT_PUBLIC_MONGODB_MODE:-local}
     container_name: axia-webapp
     restart: unless-stopped
+    <<: *hardening
     ports:
-      - "${WEBAPP_PORT:-3000}:3000"
+      - "127.0.0.1:${WEBAPP_PORT:-3000}:3000"
     environment:
       # Server-side (used by API routes running in Node)
       SERVICE_URL: http://service:8000
@@ -131,9 +146,6 @@ services:
       # Client-side (NEXT_PUBLIC_* are baked into the bundle at build-time;
       # we re-pass them here in case any client code reads them at runtime)
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
-      NEXT_PUBLIC_MONGODB_URI: ${NEXT_PUBLIC_MONGODB_URI:-mongodb://localhost:27017}
-      NEXT_PUBLIC_MONGODB_DB: ${NEXT_PUBLIC_MONGODB_DB:-axia}
-      NEXT_PUBLIC_MONGODB_MODE: ${NEXT_PUBLIC_MONGODB_MODE:-local}
       NEXT_PUBLIC_DEBUG: ${NEXT_PUBLIC_DEBUG:-false}
       AUTH_SECRET: ${AUTH_SECRET:-}
       AUTH_GOOGLE_ID: ${AUTH_GOOGLE_ID:-}

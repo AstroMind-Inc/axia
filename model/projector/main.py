@@ -10,6 +10,7 @@ Download strategy mirrors ``data/ingest/load_from_huggingface.py``:
   - Subsequent starts reuse the cache without network access.
 """
 
+import hashlib
 import json
 import logging
 import os
@@ -47,6 +48,27 @@ logger = logging.getLogger(__name__)
 HF_REPO_ID = os.getenv("HF_REPO_ID", "astromindinc/axia-qwen-xray-7b")
 CACHE_DIR = Path(os.getenv("PROJECTOR_CACHE_DIR", "/tmp/axia-projector"))
 
+# The PCA/UMAP bundle is a joblib (pickle) file: loading it runs whatever code
+# it contains. So the download is pinned to an exact commit and both binary
+# artifacts are checked against known SHA-256 digests before they are loaded.
+# Anyone able to push to the Hugging Face repo, or to swap HF_REPO_ID, would
+# otherwise get code execution here on the next cold start.
+#
+# To ship retrained weights, set all three variables (the digests are the
+# "lfs.oid" values Hugging Face shows for each file at that commit).
+HF_REVISION = os.getenv("HF_REVISION", "c5289edf8f5ce9ab2e42f50d7549624de53f5875")
+EXPECTED_SHA256 = {
+    "projector/xray_processor.pt": os.getenv(
+        "PROJECTOR_WEIGHTS_SHA256",
+        "7b27e75811a983539a6d38511f0c35363329e22c8a501005bc822508c92f8607",
+    ),
+    "pca_umap/xray_umap_pca_bundle.joblib": os.getenv(
+        "PROJECTOR_BUNDLE_SHA256",
+        "2c69bfc8cb4e5beebd6cd94a080cd8d569a092c65527e10fb3de394664a6c443",
+    ),
+}
+MAX_EVENTS = int(os.getenv("MAX_EVENTS_PER_LIST", "50000"))
+
 EXPECTED_FILES = [
     "projector/xray_processor.pt",
     "projector/projector_config.json",
@@ -81,6 +103,22 @@ def _has_complete_cache(cache_dir: Path) -> bool:
     )
 
 
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as f:
+        for block in iter(lambda: f.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _hash_mismatches(cache_dir: Path) -> list:
+    return [
+        name
+        for name, expected in EXPECTED_SHA256.items()
+        if _sha256(cache_dir / name) != expected
+    ]
+
+
 def _download_weights() -> Path:
     """Download projector + pca_umap artifacts from HF Hub (cached).
 
@@ -89,7 +127,7 @@ def _download_weights() -> Path:
     """
     from huggingface_hub import snapshot_download
 
-    if _has_complete_cache(CACHE_DIR):
+    if _has_complete_cache(CACHE_DIR) and not _hash_mismatches(CACHE_DIR):
         size = sum((CACHE_DIR / f).stat().st_size for f in EXPECTED_FILES)
         logger.info(
             "Using cached weights at %s (%d files, ~%s on disk)",
@@ -99,13 +137,14 @@ def _download_weights() -> Path:
         )
         return CACHE_DIR
 
-    logger.info("Downloading weights from %s ...", HF_REPO_ID)
+    logger.info("Downloading weights from %s at %s ...", HF_REPO_ID, HF_REVISION)
     logger.info("  target: %s", CACHE_DIR)
     logger.info("  (this is a one-time download; subsequent starts reuse the cache)")
 
     snapshot_download(
         repo_id=HF_REPO_ID,
         repo_type="model",
+        revision=HF_REVISION,
         allow_patterns=["projector/*", "pca_umap/*"],
         local_dir=str(CACHE_DIR),
         token=os.getenv("HF_TOKEN") or None,
@@ -114,6 +153,14 @@ def _download_weights() -> Path:
     if not _has_complete_cache(CACHE_DIR):
         missing = [f for f in EXPECTED_FILES if not (CACHE_DIR / f).exists()]
         raise RuntimeError(f"Download incomplete; missing: {missing}")
+
+    bad = _hash_mismatches(CACHE_DIR)
+    if bad:
+        raise RuntimeError(
+            f"Refusing to load {bad}: SHA-256 does not match the pinned digest. "
+            "If the weights were retrained on purpose, update HF_REVISION and "
+            "the PROJECTOR_*_SHA256 values."
+        )
 
     size = sum((CACHE_DIR / f).stat().st_size for f in EXPECTED_FILES)
     logger.info("Download complete (%s on disk)", _human_bytes(size))
@@ -175,7 +222,9 @@ async def health():
 
 
 class ProjectionRequest(BaseModel):
-    event_list: List[List[float]] = Field(..., description="[[time, energy], ...]")
+    event_list: List[List[float]] = Field(
+        ..., max_length=MAX_EVENTS, description="[[time, energy], ...]"
+    )
     is_pruned: bool = Field(False, description="If true, skip pruning.")
 
 

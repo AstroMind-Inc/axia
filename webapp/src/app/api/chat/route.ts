@@ -3,11 +3,15 @@ import api from '@/app/lib/api';
 import { NextResponse } from 'next/server';
 import { requireUserId } from '@/app/lib/authz';
 import { forwardableModelUrl } from '@/app/lib/model-url';
+import { rateLimit } from '@/app/lib/rate-limit';
+import { MAX_MESSAGE_CHARS, trimHistory } from '@/app/lib/chat-limits';
 
 export async function POST(request: Request) {
   try {
     const authz = await requireUserId();
     if ('error' in authz) return authz.error;
+    const limited = rateLimit(authz.userId, 'analysis');
+    if (limited) return limited;
 
     const body = await request.json();
     const {
@@ -32,6 +36,13 @@ export async function POST(request: Request) {
       );
     }
 
+    if (typeof message !== 'string' || message.length > MAX_MESSAGE_CHARS) {
+      return NextResponse.json(
+        { message: `Messages are limited to ${MAX_MESSAGE_CHARS} characters.` },
+        { status: 413 }
+      );
+    }
+
     // Transform the request to match the backend API model
     const transformedBody: {
       message: string;
@@ -47,7 +58,7 @@ export async function POST(request: Request) {
       context_settings: unknown | null;
     } = {
       message,
-      history,
+      history: trimHistory(history),
       model,
       response_format,
       context_settings: context_settings || null,
@@ -146,7 +157,7 @@ export async function POST(request: Request) {
       }
 
       return NextResponse.json(
-        { message: error.message },
+        { message: 'The analysis failed. Please try again.' },
         { status: 500 }
       );
     }

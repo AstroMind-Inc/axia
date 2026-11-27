@@ -32,7 +32,6 @@ next-env.d.ts
 
 # Lockfiles regenerated per environment
 service/poetry.lock
-webapp/package-lock.json
 
 # Model checkpoints + data dumps
 model/server/checkpoints/

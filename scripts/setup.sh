@@ -37,11 +37,9 @@ if [[ "$mongo_choice" == "2" ]]; then
     done
     read -rp "MongoDB database name [axia]: " MONGODB_DB
     MONGODB_DB=${MONGODB_DB:-axia}
-    NEXT_PUBLIC_MONGODB_URI="$MONGODB_URI"
 else
     MONGODB_MODE="local"
     MONGODB_URI="mongodb://mongo:27017"
-    NEXT_PUBLIC_MONGODB_URI="mongodb://localhost:27017"
     MONGODB_DB="axia"
 fi
 
@@ -100,9 +98,6 @@ PROJECTOR_PORT=8001
 WEBAPP_PORT=3000
 
 NEXT_PUBLIC_API_URL=http://localhost:8000
-NEXT_PUBLIC_MONGODB_URI=$NEXT_PUBLIC_MONGODB_URI
-NEXT_PUBLIC_MONGODB_DB=$MONGODB_DB
-NEXT_PUBLIC_MONGODB_MODE=$MONGODB_MODE
 NEXT_PUBLIC_ALLOWED_FILE_TYPES=.json,.pkl
 NEXT_PUBLIC_DEBUG=false
 

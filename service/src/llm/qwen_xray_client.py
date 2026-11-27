@@ -4,6 +4,22 @@ import asyncio
 from typing import List, Dict, Any, Literal, Optional, Tuple
 
 from src.api.models import ChatMessage
+from src.core.logger import get_logger
+from src.core.settings import get_settings
+
+logger = get_logger(__name__)
+
+# Generation on the model server can take minutes; the projector is quicker.
+_INFERENCE_TIMEOUT = aiohttp.ClientTimeout(total=600, connect=10)
+_PROJECT_TIMEOUT = aiohttp.ClientTimeout(total=300, connect=10)
+
+
+def _headers() -> Dict[str, str]:
+    headers = {"Content-Type": "application/json"}
+    token = get_settings().model_server_token
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    return headers
 
 
 async def generate_response(
@@ -61,14 +77,13 @@ async def generate_response(
     if event_list is not None:
         payload["event_list"] = event_list
 
-    headers = {
-        "Content-Type": "application/json"
-    }
+    headers = _headers()
 
     try:
-        async with aiohttp.ClientSession() as session:
-            print("Sending request to:", url)
-            async with session.post(url, headers=headers, json=payload) as response:
+        async with aiohttp.ClientSession(timeout=_INFERENCE_TIMEOUT) as session:
+            # Redirects are not followed: a redirect is the classic way to
+            # bounce a server-side request onto an internal address.
+            async with session.post(url, headers=headers, json=payload, allow_redirects=False) as response:
                 response.raise_for_status()
                 response_data = await response.json()
                 # Extract answer from response, ignoring processed_data
@@ -78,12 +93,16 @@ async def generate_response(
                     return "No answer found in the response", None
 
 
-    except aiohttp.ClientError as e:
-        return f"Error making API request: {str(e)}", None
+    # The exception text names the model server's host, which users should
+    # not learn; it goes to the log only.
+    except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+        logger.error("Model server request failed: %s", e)
+        return "Error: the event model is unavailable right now.", None
     except json.JSONDecodeError:
         return "Error parsing response as JSON", None
     except Exception as e:
-        return f"Unexpected error: {str(e)}", None
+        logger.error("Model server request failed unexpectedly: %s", e, exc_info=True)
+        return "Error: the event model is unavailable right now.", None
 
 
 async def generate_embeddings(
@@ -101,30 +120,24 @@ async def generate_embeddings(
     Returns:
         Tuple of (pca_64d, umap_2d, error_message, pruned_event_list, input_event_list)
     """
-    print("🔥 generate_embeddings function called in infer.py")
-    print(f"📊 Event list length: {len(event_list)}")
-    print(f"🌐 Base URL: {base_url}")
-    
+    logger.info("Requesting embeddings for %d events", len(event_list))
+
     # Ensure the base_url doesn't end with a slash
     if base_url.endswith('/'):
         base_url = base_url[:-1]
 
     url = f"{base_url}/project"
-    print(f"🎯 Full URL: {url}")
 
     payload = {
         "event_list": event_list,
         "is_pruned": is_pruned
     }
 
-    headers = {
-        "Content-Type": "application/json"
-    }
+    headers = _headers()
 
     try:
-        async with aiohttp.ClientSession() as session:
-            print(f"Requesting embeddings from: {url}")
-            async with session.post(url, headers=headers, json=payload) as response:
+        async with aiohttp.ClientSession(timeout=_PROJECT_TIMEOUT) as session:
+            async with session.post(url, headers=headers, json=payload, allow_redirects=False) as response:
                 response.raise_for_status()
                 response_data = await response.json()
                 
@@ -143,9 +156,11 @@ async def generate_embeddings(
                 
                 return pca_64d, umap_2d, None, pruned_event_list, input_event_list
 
-    except aiohttp.ClientError as e:
-        return None, None, f"Error making API request: {str(e)}", None, None
+    except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+        logger.error("Projector request failed: %s", e)
+        return None, None, "The embedding service is unavailable right now.", None, None
     except json.JSONDecodeError:
         return None, None, "Error parsing response as JSON", None, None
     except Exception as e:
-        return None, None, f"Unexpected error: {str(e)}", None, None
+        logger.error("Projector request failed unexpectedly: %s", e, exc_info=True)
+        return None, None, "The embedding service is unavailable right now.", None, None

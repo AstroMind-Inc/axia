@@ -38,7 +38,7 @@ import { ChatThreadSelector } from "@/app/components/chat-history/ChatThreadSele
 import { FeedbackButton } from "@/app/components/feedback/FeedbackButton";
 import { Modal } from "@/app/components/ui/modal";
 import AgentSettings, { AgentConfig, DEFAULT_AGENT_CONFIG } from "@/app/components/playground/AgentSettings";
-import { marked } from "marked";
+import { renderMarkdown } from "@/app/lib/render-markdown";
 import { Message, Metadata, MatchingContent } from "@/app/types/chat";
 import { ChatMessage as HistoryChatMessage } from "@/app/types/chat-history";
 import { MODEL_OPTIONS } from "@/app/constants/models";
@@ -1767,14 +1767,14 @@ export default function ChatWindow() {
                             <div
                               className="markdown-content"
                               dangerouslySetInnerHTML={{
-                                __html: marked.parse(typingText || ''),
+                                __html: renderMarkdown(typingText || ''),
                               }}
                             />
                           ) : (
                             <div
                               className="markdown-content"
                               dangerouslySetInnerHTML={{
-                                __html: marked.parse(message.content || '⏳ Loading...'),
+                                __html: renderMarkdown(message.content || '⏳ Loading...'),
                               }}
                             />
                           )}
@@ -2201,7 +2201,7 @@ export default function ChatWindow() {
                 {validationResult ? (
                   <div
                     dangerouslySetInnerHTML={{
-                      __html: marked.parse(validationResult),
+                      __html: renderMarkdown(validationResult),
                     }}
                   />
                 ) : (

@@ -86,7 +86,7 @@ class SimpleWorkflow:
                 - critic: Run critic review (default: True)
                 - toolAgent: Run tool agent (default: True)
         """
-        print(f"DEBUG: Starting simple workflow for: {user_message}")
+        print("DEBUG: Starting multi-agent workflow")
         
         # Parse agent configuration (all True by default)
         if agent_config is None:
@@ -158,7 +158,7 @@ class SimpleWorkflow:
                     "message": "Analyzing event data with specialized model..."
                 }
                 
-                print(f"DEBUG: Step {current_step} - Calling event analysis with prompt: {user_message}")
+                print(f"DEBUG: Step {current_step} - Calling event analysis")
                 print(f"DEBUG: Using PRUNED event_list with {len(event_list)} events for fine-tuned model")
                 event_result = await self._call_event_analysis(user_message, event_list)
                 state["event_analysis_result"] = event_result
@@ -210,7 +210,7 @@ class SimpleWorkflow:
                     "message": "Analyzing metadata and spectral characteristics..."
                 }
                 
-                print(f"DEBUG: Step {current_step} - Calling metadata analysis with prompt: {user_message}")
+                print(f"DEBUG: Step {current_step} - Calling metadata analysis")
                 print(f"DEBUG: Using data_obj with ORIGINAL event_list (full, unpruned) for spectrum snapshot")
                 
                 # Generate light curve image for both LLM and UI display
@@ -476,7 +476,7 @@ class SimpleWorkflow:
 
                 except Exception as e:  # noqa: BLE001
                     logger.warning("Tool agent failed: %s", e, exc_info=True)
-                    state["tool_analysis_result"] = f"Tool agent encountered an error: {e}"
+                    state["tool_analysis_result"] = "Tool agent encountered an error."
                     state["conversation_log"].append({
                         "agent": "ToolAgent",
                         "action": "error",
@@ -526,11 +526,11 @@ class SimpleWorkflow:
             }
             
         except Exception as e:
-            print(f"ERROR: Workflow failed: {str(e)}")
+            logger.error("Workflow failed: %s", e, exc_info=True)
             yield {
                 "type": "error",
-                "message": f"Workflow failed: {str(e)}",
-                "error": str(e)
+                "message": "The analysis failed. Please try again.",
+                "error": "workflow_failed"
             }
             raise e
     
@@ -572,7 +572,8 @@ class SimpleWorkflow:
             return result
             
         except Exception as e:
-            return f"Neighbor analysis failed: {str(e)}"
+            logger.error("Neighbor analysis failed: %s", e, exc_info=True)
+            return "Neighbor analysis failed."
     
     async def _get_critic_review(self, state: SimpleWorkflowState) -> str:
         """Get critic review of both analyses."""
@@ -625,7 +626,8 @@ class SimpleWorkflow:
             result = await self.critic.review_analyses(review_prompt, openai_model=self.openai_model)
             return result
         except Exception as e:
-            return f"Critic review failed: {str(e)}"
+            logger.error("Critic review failed: %s", e, exc_info=True)
+            return "Critic review failed."
     
     def get_advanced_moderator_prompt(self, state: SimpleWorkflowState) -> str:
         """Build the full advanced moderator prompt (current detailed prompt)."""
@@ -800,4 +802,5 @@ Keep the tone scientific and confident, focusing on evidence-based explanation.
             result = await self.moderator.moderate_discussion(moderation_prompt, openai_model=self.openai_model)
             return result
         except Exception as e:
-            return f"Moderator response failed: {str(e)}"
+            logger.error("Moderator response failed: %s", e, exc_info=True)
+            return "Moderator response failed."

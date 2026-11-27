@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToMongoDB } from '@/app/lib/mongodb';
 import { canAccessCollection, requireUserId } from '@/app/lib/authz';
+import { rateLimit } from '@/app/lib/rate-limit';
 
 interface RouteParams {
   params: Promise<{
@@ -12,6 +13,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const authz = await requireUserId();
     if ('error' in authz) return authz.error;
+    const limited = rateLimit(authz.userId, 'compute');
+    if (limited) return limited;
 
     const resolvedParams = await params;
     const fileName = resolvedParams.name;
@@ -148,7 +151,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json(
       { 
         message: 'Failed to fetch UMAP data',
-        error: error instanceof Error ? error.message : String(error)
       },
       { status: 500 }
     );

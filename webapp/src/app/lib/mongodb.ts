@@ -20,21 +20,15 @@ try {
   dns.setDefaultResultOrder('ipv4first');
 } catch {}
 
-// Server-side (Node) routes use MONGODB_URI when set so they can reach Mongo
-// over the docker network. NEXT_PUBLIC_MONGODB_URI is only here for any
-// (rare) client-side usage and as a final fallback.
-const MONGODB_URI =
-  process.env.MONGODB_URI ||
-  process.env.NEXT_PUBLIC_MONGODB_URI ||
-  'mongodb://localhost:27017';
+// Server-only configuration. These must never be NEXT_PUBLIC_* variables:
+// Next.js inlines those into the build, and an Atlas URI carries the
+// database password.
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017';
 
-const MONGODB_DB =
-  process.env.MONGODB_DB || process.env.NEXT_PUBLIC_MONGODB_DB || 'axia';
+const MONGODB_DB = process.env.MONGODB_DB || 'axia';
 
 export const MONGODB_MODE: 'local' | 'external' =
-  (process.env.NEXT_PUBLIC_MONGODB_MODE || process.env.MONGODB_MODE || 'local') === 'external'
-    ? 'external'
-    : 'local';
+  (process.env.MONGODB_MODE || 'local') === 'external' ? 'external' : 'local';
 
 export { SOURCES_COLLECTION, METADATA_COLLECTION };
 

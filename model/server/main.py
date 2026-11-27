@@ -2,11 +2,13 @@
 
 # uvicorn main:app --host 0.0.0.0 --port 8000
 
+import hmac
 import os
 import torch
 import logging
 import traceback
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
 from peft import PeftModel
@@ -49,6 +51,23 @@ app = FastAPI(
     description="API for generating answers using a locally fine-tuned Qwen X-ray model",
     version="1.0.0"
 )
+
+# Optional shared secret. This server is usually run on a rented GPU with its
+# port open to the internet, and without a token anyone who learns the URL can
+# run generations on it. When MODEL_SERVER_TOKEN is set, every route except
+# /health requires `Authorization: Bearer <token>`; set the same value as
+# MODEL_SERVER_TOKEN in the Axia service's environment.
+_MODEL_SERVER_TOKEN = os.getenv("MODEL_SERVER_TOKEN", "")
+
+
+@app.middleware("http")
+async def require_token(request: Request, call_next):
+    if _MODEL_SERVER_TOKEN and request.url.path != "/health":
+        supplied = request.headers.get("authorization", "")
+        if not hmac.compare_digest(supplied, f"Bearer {_MODEL_SERVER_TOKEN}"):
+            return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+    return await call_next(request)
+
 
 # Global placeholders
 model = None
@@ -160,10 +179,10 @@ async def health_check():
 # Request / response schemas
 class InferenceRequest(BaseModel):
     event_list: List[List[float]] = Field(
-        ..., description="List of [time, energy] pairs"
+        ..., max_length=50_000, description="List of [time, energy] pairs"
     )
-    prompt: str = Field(..., description="User question for the X-ray data")
-    max_new_tokens: int = Field(150, description="Max tokens to generate")
+    prompt: str = Field(..., max_length=20_000, description="User question for the X-ray data")
+    max_new_tokens: int = Field(150, ge=1, le=2048, description="Max tokens to generate")
     temperature: float = Field(0.7, description="Sampling temperature")
 
 
@@ -174,7 +193,7 @@ class InferenceResponse(BaseModel):
 
 
 class ProjectionRequest(BaseModel):
-    event_list: List[List[float]] = Field(..., description="List of [time, energy] pairs")
+    event_list: List[List[float]] = Field(..., max_length=50_000, description="List of [time, energy] pairs")
     is_pruned: bool = Field(False, description="If true, skip pruning and use event_list as-is")
     
 class ProjectionResponse(BaseModel):

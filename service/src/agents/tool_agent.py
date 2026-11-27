@@ -39,9 +39,16 @@ logger = logging.getLogger(__name__)
 # HiPS2FITS public endpoint
 # ---------------------------------------------------------------------------
 
-HIPS2FITS_URL = "http://alasky.cds.unistra.fr/hips-image-services/hips2fits"
+HIPS2FITS_URL = "https://alasky.cds.unistra.fr/hips-image-services/hips2fits"
 HIPS2FITS_TIMEOUT_S = 60.0
 HIPS2FITS_USER_AGENT = "axia/1.0 (HiPS2FITS research agent)"
+
+# Every image fetched is sent back to the model on each later iteration, so
+# image count and size drive token spend directly. The model chooses both,
+# and its input includes text a user supplied, so both are capped here.
+MAX_IMAGE_PIXELS_PER_SIDE = 1024
+MAX_TOOL_CALLS_PER_TURN = 4
+_HIPS2FITS_PARAMS = ("hips", "ra", "dec", "fov", "width", "height", "projection", "coordsys", "format")
 
 # The full list of supported survey IDs lives at
 # https://aladin.cds.unistra.fr/hips/list; the ones below are the verified
@@ -183,8 +190,8 @@ HIPS2FITS_TOOL_SPEC: Dict[str, Any] = {
                     "minimum": 0.001,
                     "maximum": 10.0,
                 },
-                "width": {"type": "integer", "default": 512, "minimum": 64, "maximum": 2048},
-                "height": {"type": "integer", "default": 512, "minimum": 64, "maximum": 2048},
+                "width": {"type": "integer", "default": 512, "minimum": 64, "maximum": 1024},
+                "height": {"type": "integer", "default": 512, "minimum": 64, "maximum": 1024},
                 "projection": {
                     "type": "string",
                     "enum": ["TAN", "SIN", "AIT", "MOL", "STG", "ZEA", "CAR"],
@@ -226,8 +233,13 @@ async def _call_hips2fits(
         "projection": "TAN",
         "coordsys": "icrs",
         "format": "png",
-        **{k: v for k, v in params.items() if v is not None},
+        **{k: v for k, v in params.items() if v is not None and k in _HIPS2FITS_PARAMS},
     }
+    for side in ("width", "height"):
+        try:
+            request_params[side] = max(64, min(int(request_params[side]), MAX_IMAGE_PIXELS_PER_SIDE))
+        except (TypeError, ValueError):
+            request_params[side] = 512
 
     try:
         response = await client.get(
@@ -462,7 +474,19 @@ class ToolAgent:
                 # look at.
                 pending_images: List[Dict[str, Any]] = []
 
-                for tc in assistant.tool_calls:
+                for call_index, tc in enumerate(assistant.tool_calls):
+                    if call_index >= MAX_TOOL_CALLS_PER_TURN:
+                        messages.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": tc.id,
+                                "content": (
+                                    f"Skipped: at most {MAX_TOOL_CALLS_PER_TURN} images "
+                                    "can be requested per turn."
+                                ),
+                            }
+                        )
+                        continue
                     try:
                         args = json.loads(tc.function.arguments or "{}")
                     except json.JSONDecodeError as e:

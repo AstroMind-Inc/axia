@@ -1,8 +1,11 @@
 node_modules
 .next
 .turbo
+# Any local env file. Next.js inlines NEXT_PUBLIC_* values from .env.* files
+# into the build, and server values would be baked into the image layers.
 .env
-.env.local
+.env.*
+!example.env.local
 .git
 Dockerfile
 README.md

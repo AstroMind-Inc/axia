@@ -2,9 +2,20 @@ name: axia
 
 # Production overlay — extends docker-compose.yml with:
 #   - Caddy reverse proxy (auto-HTTPS)
-#   - Autoheal (restarts unhealthy containers)
 #   - Log rotation on all containers
 #   - Internal-only ports (only 80/443 exposed)
+#   - Network segmentation (below)
+#   - axia.autoheal labels, read by the host-side autoheal timer
+#     (scripts/autoheal.sh, installed by scripts/prod-update.sh). No container
+#     is given the Docker socket.
+#
+# Networks:
+#   edge     caddy <-> webapp. Caddy can reach nothing else.
+#   backend  webapp, service, projector; has internet egress (Google sign-in,
+#            OpenAI, Hugging Face, HiPS2FITS).
+#   data     mongo, reachable only by webapp, service and the seed job. No
+#            egress. Mongo has no users, so this is what keeps a compromised
+#            projector or proxy away from every user's chats and uploads.
 #
 # Usage:
 #   make prod-up          (or)
@@ -33,6 +44,11 @@ services:
         condition: service_started
       service:
         condition: service_healthy
+    networks: [edge]
+    security_opt:
+      - no-new-privileges:true
+    labels:
+      axia.autoheal: "true"
     # Probe Caddy's admin API, not the public site. Port 80 serves only an
     # automatic HTTP->HTTPS redirect, so a probe there follows a 308 to
     # https://localhost/ and fails the TLS handshake — the certificate is
@@ -57,40 +73,30 @@ services:
         max-file: "3"
 
   # ---------------------------------------------------------------------------
-  # Autoheal — restarts containers that fail their health checks
-  # ---------------------------------------------------------------------------
-  autoheal:
-    image: willfarrell/autoheal:latest
-    container_name: axia-autoheal
-    restart: unless-stopped
-    environment:
-      AUTOHEAL_CONTAINER_LABEL: all
-      AUTOHEAL_INTERVAL: 30
-      AUTOHEAL_START_PERIOD: 180
-      AUTOHEAL_DEFAULT_STOP_TIMEOUT: 10
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    logging:
-      driver: json-file
-      options:
-        max-size: "5m"
-        max-file: "2"
-
-  # ---------------------------------------------------------------------------
   # Overrides — lock down ports, add log rotation
   # ---------------------------------------------------------------------------
   mongo:
-    ports: !override
-      - "127.0.0.1:27017:27017"
+    # Not published at all in production. Reach it with `make shell-mongo`
+    # (docker exec), which needs no port.
+    ports: !reset []
+    networks: [data]
+    labels:
+      axia.autoheal: "true"
     logging:
       driver: json-file
       options:
         max-size: "50m"
         max-file: "5"
 
+  mongo-init:
+    networks: [data]
+
   projector:
     ports: !override
       - "127.0.0.1:8001:8001"
+    networks: [backend]
+    labels:
+      axia.autoheal: "true"
     logging:
       driver: json-file
       options:
@@ -100,6 +106,9 @@ services:
   service:
     ports: !override
       - "127.0.0.1:8000:8000"
+    networks: [backend, data]
+    labels:
+      axia.autoheal: "true"
     logging:
       driver: json-file
       options:
@@ -109,6 +118,9 @@ services:
   webapp:
     ports: !override
       - "127.0.0.1:3000:3000"
+    networks: [edge, backend, data]
+    labels:
+      axia.autoheal: "true"
     environment:
       AUTH_TRUST_HOST: "true"
       AUTH_URL: ${AUTH_URL:-https://${DOMAIN:-localhost}}
@@ -117,6 +129,12 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+networks:
+  edge: {}
+  backend: {}
+  data:
+    internal: true
 
 volumes:
   caddy-data:

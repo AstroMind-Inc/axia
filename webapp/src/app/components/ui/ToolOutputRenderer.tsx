@@ -77,7 +77,18 @@ const ToolOutputRenderer: React.FC<ToolOutputRendererProps> = ({ result, toolNam
       metadata = result.metadata || {};
     }
 
-    if (!imageUrl) return renderJson();
+    // The URL ends up in <img src> and in a download link's href. Only inline
+    // raster images and the HiPS2FITS host are allowed; a javascript: or
+    // other-origin URL from a manipulated tool result must not get there.
+    if (
+      !imageUrl ||
+      !(
+        /^data:image\/(png|jpe?g|gif|webp);base64,/i.test(imageUrl) ||
+        imageUrl.startsWith('https://alasky.cds.unistra.fr/')
+      )
+    ) {
+      return renderJson();
+    }
 
     const format = result.format || 'png';
     const survey = metadata.survey || toolName;

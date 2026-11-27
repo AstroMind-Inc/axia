@@ -3,6 +3,7 @@ import { connectToMongoDB, MONGODB_MODE, SOURCES_COLLECTION } from '@/app/lib/mo
 import { cosine, createTopK } from '@/app/lib/vector-search';
 import { canAccessCollection, requireUserId } from '@/app/lib/authz';
 import { excludeSelfNeighbors } from '@/app/lib/neighbors';
+import { rateLimit } from '@/app/lib/rate-limit';
 
 // Projection used by both the Atlas $vectorSearch and the local brute-force fallback.
 const PROJECTION = {
@@ -40,6 +41,8 @@ export async function POST(request: NextRequest) {
   try {
     const authz = await requireUserId();
     if ('error' in authz) return authz.error;
+    const limited = rateLimit(authz.userId, 'compute');
+    if (limited) return limited;
 
     const body = await request.json();
     const {
@@ -58,9 +61,16 @@ export async function POST(request: NextRequest) {
       exclude_id?: unknown;
     } = body;
 
-    if (!Array.isArray(vector) || vector.length === 0) {
+    // pca_64d vectors are 64 numbers. Anything else is either a mistake or an
+    // attempt to make the scan do extra work per document.
+    if (
+      !Array.isArray(vector) ||
+      vector.length === 0 ||
+      vector.length > 128 ||
+      !vector.every((x) => typeof x === 'number' && Number.isFinite(x))
+    ) {
       return NextResponse.json(
-        { error: 'non-empty `vector` is required' },
+        { error: '`vector` must be a non-empty array of at most 128 finite numbers' },
         { status: 400 },
       );
     }
@@ -71,7 +81,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
     const coll = db.collection(targetCollection);
-    const k = Math.min(Number(limit) || 10, 50);
+    const k = Math.max(1, Math.min(Math.trunc(Number(limit)) || 10, 50));
 
     if (MONGODB_MODE === 'external') {
       // Atlas $vectorSearch path (unchanged from production).
@@ -131,7 +141,7 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error('Error in nearest-neighbors:', error);
     return NextResponse.json(
-      { error: error?.message || 'Failed to find nearest neighbors' },
+      { error: 'Failed to find nearest neighbors' },
       { status: 500 },
     );
   }

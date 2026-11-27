@@ -3,6 +3,7 @@ import { connectToMongoDB, MONGODB_MODE } from '@/app/lib/mongodb';
 import { cosine, createTopK } from '@/app/lib/vector-search';
 import { canAccessCollection, requireUserId } from '@/app/lib/authz';
 import { excludeSelfNeighbors } from '@/app/lib/neighbors';
+import { rateLimit } from '@/app/lib/rate-limit';
 
 interface RouteParams {
   params: Promise<{ name: string }>;
@@ -48,6 +49,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const authz = await requireUserId();
     if ('error' in authz) return authz.error;
+    const limited = rateLimit(authz.userId, 'compute');
+    if (limited) return limited;
 
     const resolvedParams = await params;
     const { searchParams } = new URL(request.url);

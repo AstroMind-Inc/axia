@@ -40,7 +40,7 @@ export async function GET(request: Request, { params }: RouteParams) {
   } catch (error) {
     console.error("Error fetching chat messages:", error);
     return NextResponse.json(
-      { message: error instanceof Error ? error.message : "Internal server error" },
+      { message: "Internal server error" },
       { status: 500 },
     );
   }
@@ -105,7 +105,7 @@ export async function POST(request: Request, { params }: RouteParams) {
   } catch (error) {
     console.error("Error creating chat message:", error);
     return NextResponse.json(
-      { message: error instanceof Error ? error.message : "Internal server error" },
+      { message: "Internal server error" },
       { status: 500 },
     );
   }

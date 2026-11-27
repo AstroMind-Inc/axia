@@ -3,6 +3,12 @@ import { NextResponse } from 'next/server';
 import { connectToMongoDB, METADATA_COLLECTION } from '@/app/lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { requireUserId } from '@/app/lib/authz';
+import {
+  MAX_DATASETS_PER_USER,
+  MAX_NAME_LENGTH,
+  MAX_OBJECTS_PER_DATASET,
+} from '@/app/lib/upload-limits';
+import { rateLimit } from '@/app/lib/rate-limit';
 
 // Function to sanitize an object (replace NaN with null)
 function sanitizeObject(obj: Record<string, any>): Record<string, any> {
@@ -80,6 +86,8 @@ export async function POST(request: Request) {
   try {
     const authz = await requireUserId();
     if ('error' in authz) return authz.error;
+    const limited = rateLimit(authz.userId, 'upload');
+    if (limited) return limited;
 
     const { datasetName, dataObjects } = await request.json();
 
@@ -90,10 +98,28 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+    if (datasetName.length > MAX_NAME_LENGTH) {
+      return NextResponse.json(
+        { success: false, message: `Dataset name must be at most ${MAX_NAME_LENGTH} characters` },
+        { status: 400 }
+      );
+    }
 
     if (!dataObjects || !Array.isArray(dataObjects) || dataObjects.length === 0) {
       return NextResponse.json(
         { success: false, message: 'At least one data object is required' },
+        { status: 400 }
+      );
+    }
+    if (dataObjects.length > MAX_OBJECTS_PER_DATASET) {
+      return NextResponse.json(
+        { success: false, message: `A dataset can hold at most ${MAX_OBJECTS_PER_DATASET} objects` },
+        { status: 413 }
+      );
+    }
+    if (!dataObjects.every((o) => o !== null && typeof o === 'object' && !Array.isArray(o))) {
+      return NextResponse.json(
+        { success: false, message: 'Every data object must be a JSON object' },
         { status: 400 }
       );
     }
@@ -121,6 +147,19 @@ export async function POST(request: Request) {
 
     // Connect to MongoDB
     const { dataDb, metaDb } = await connectToMongoDB();
+
+    const existing = await metaDb
+      .collection(METADATA_COLLECTION)
+      .countDocuments({ user_id: authz.userId });
+    if (existing >= MAX_DATASETS_PER_USER) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: `You can keep at most ${MAX_DATASETS_PER_USER} datasets. Delete one to upload another.`,
+        },
+        { status: 409 }
+      );
+    }
 
     // Create a new collection and insert the objects
     await dataDb.createCollection(collectionName);
@@ -158,7 +197,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         success: false,
-        message: error instanceof Error ? error.message : 'Internal server error'
+        message: 'Internal server error'
       },
       { status: 500 }
     );

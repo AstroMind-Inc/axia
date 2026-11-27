@@ -65,13 +65,18 @@ def is_reasoning_model(model: Optional[str]) -> bool:
 def resolve(model: Optional[str]) -> str:
     """Return the model to use, honouring OPENAI_DEFAULT_MODEL.
 
-    Precedence: the model named by the request, then the deployment's
-    OPENAI_DEFAULT_MODEL, then DEFAULT_MODEL. The settings import is done
+    Precedence: the model named by the request if it is one of
+    SUPPORTED_MODELS, then the deployment's OPENAI_DEFAULT_MODEL, then
+    DEFAULT_MODEL. The settings import is done
     lazily because src.core.settings imports DEFAULT_MODEL from this module
     for its field default, and a module-level import would be circular.
     """
-    if model:
+    if model and model in SUPPORTED_MODELS:
         return model
+    # Anything else falls back to the deployment default. The model name
+    # arrives in request bodies, and passing it through would let any
+    # signed-in user run the workflow on the most expensive model the
+    # organisation's key can reach.
     try:
         from src.core.settings import get_settings
 
