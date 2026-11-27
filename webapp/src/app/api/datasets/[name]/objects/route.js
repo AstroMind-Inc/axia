@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { connectToMongoDB } from '@/app/lib/mongodb';
 import { canAccessCollection, requireUserId } from '@/app/lib/authz';
+import { QUERY_MAX_TIME_MS, clampInt } from '@/app/lib/query-limits';
 
 export async function GET(request, { params }) {
   try {
@@ -12,8 +13,9 @@ export async function GET(request, { params }) {
     const url = new URL(request.url);
     
     // Parse pagination parameters
-    const skip = parseInt(url.searchParams.get('skip') || '0', 10);
-    const limit = parseInt(url.searchParams.get('limit') || '20', 10);
+    // `limit=0` means "no limit" to Mongo, so the floor is 1.
+    const skip = clampInt(url.searchParams.get('skip'), 0, 0, 1_000_000);
+    const limit = clampInt(url.searchParams.get('limit'), 20, 1, 100);
 
     if (!fileName) {
       return NextResponse.json(
@@ -45,6 +47,7 @@ export async function GET(request, { params }) {
       })
       .skip(skip)
       .limit(limit)
+      .maxTimeMS(QUERY_MAX_TIME_MS)
       .toArray();
     
     // Debug: Check for source_type field presence
@@ -103,7 +106,7 @@ export async function GET(request, { params }) {
     console.error('Error fetching dataset objects:', error);
     return NextResponse.json(
       { 
-        message: error.message || 'Internal server error',
+        message: 'Internal server error',
         ...(error.details && { details: error.details })
       },
       { status: error.status || 500 }

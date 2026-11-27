@@ -24,7 +24,7 @@ export async function GET() {
   } catch (error) {
     console.error('Error fetching source fields data:', error);
     return NextResponse.json(
-      { message: error instanceof Error ? error.message : 'Internal server error' },
+      { message: 'Internal server error' },
       { status: 500 }
     );
   }

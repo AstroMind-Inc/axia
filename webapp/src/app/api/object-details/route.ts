@@ -18,13 +18,19 @@ export async function POST(request: Request) {
     if (!collection_name || !object_id) {
       return NextResponse.json({ message: "Missing required fields" }, { status: 400 });
     }
+    // object_id goes straight into Mongo filters. An object here (e.g.
+    // {"$gt": ""}) would be read as a query operator and match arbitrary
+    // documents, so only plain ids are accepted.
+    if (typeof object_id !== "string" && typeof object_id !== "number") {
+      return NextResponse.json({ message: "Invalid object_id" }, { status: 400 });
+    }
 
     const { dataDb, appDb } = await connectToMongoDB();
 
     let objectDetails = null;
 
     if (await canAccessCollection(dataDb, collection_name, authz.userId)) {
-      if (isValidObjectId(object_id)) {
+      if (typeof object_id === "string" && isValidObjectId(object_id)) {
         try {
           objectDetails = await dataDb.collection(collection_name).findOne({
             _id: new ObjectId(object_id),
@@ -67,7 +73,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("Error fetching object details:", error);
     return NextResponse.json(
-      { message: error instanceof Error ? error.message : "Internal server error" },
+      { message: "Internal server error" },
       { status: 500 },
     );
   }

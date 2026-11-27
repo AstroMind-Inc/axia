@@ -34,7 +34,7 @@ export async function GET(request: Request) {
   } catch (error) {
     console.error("Error fetching chat threads:", error);
     return NextResponse.json(
-      { message: error instanceof Error ? error.message : "Internal server error" },
+      { message: "Internal server error" },
       { status: 500 },
     );
   }
@@ -81,7 +81,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("Error creating chat thread:", error);
     return NextResponse.json(
-      { message: error instanceof Error ? error.message : "Internal server error" },
+      { message: "Internal server error" },
       { status: 500 },
     );
   }

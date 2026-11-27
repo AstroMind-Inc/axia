@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server';
 import { connectToMongoDB } from '@/app/lib/mongodb';
 import { canAccessCollection, requireUserId } from '@/app/lib/authz';
+import {
+  MAX_SEARCH_LENGTH,
+  QUERY_MAX_TIME_MS,
+  clampInt,
+  escapeRegex,
+} from '@/app/lib/query-limits';
 
 export async function GET(request, { params }) {
   try {
@@ -12,15 +18,18 @@ export async function GET(request, { params }) {
     const url = new URL(request.url);
 
     // Parse pagination parameters
-    const skip = parseInt(url.searchParams.get('skip') || '0', 10);
-    const limit = parseInt(url.searchParams.get('limit') || '20', 10);
+    // `limit=0` means "no limit" to Mongo, so the floor is 1.
+    const skip = clampInt(url.searchParams.get('skip'), 0, 0, 1_000_000);
+    const limit = clampInt(url.searchParams.get('limit'), 20, 1, 100);
 
     // Get search parameters
     const searchTerm = url.searchParams.get('search') || '';
-    const sourceType = url.searchParams.get('sourceType') || '';
+    const sourceType = (url.searchParams.get('sourceType') || '').slice(0, MAX_SEARCH_LENGTH);
 
-    // Sanitize search term
-    const cleanSearchTerm = searchTerm.trim();
+    // The term is matched literally. Passed through as a regex it allowed
+    // catastrophic-backtracking patterns (ReDoS) to be run over the corpus.
+    const cleanSearchTerm = searchTerm.trim().slice(0, MAX_SEARCH_LENGTH);
+    const literalTerm = escapeRegex(cleanSearchTerm);
 
     if (!fileName) {
       return NextResponse.json(
@@ -54,7 +63,7 @@ export async function GET(request, { params }) {
         // (allows partial matching like "123" matching obsid 12345)
         query.$or.push({
           obsid: {
-            $regex: `^${cleanSearchTerm}`
+            $regex: `^${literalTerm}`
           }
         });
       }
@@ -63,7 +72,7 @@ export async function GET(request, { params }) {
       console.log(`Adding text search for source_name: "${cleanSearchTerm}"`);
       query.$or.push({
         source_name: {
-          $regex: cleanSearchTerm,
+          $regex: literalTerm,
           $options: 'i'  // case-insensitive
         }
       });
@@ -72,7 +81,7 @@ export async function GET(request, { params }) {
       console.log(`Adding text search for source_type: "${cleanSearchTerm}"`);
       query.$or.push({
         source_type: {
-          $regex: cleanSearchTerm,
+          $regex: literalTerm,
           $options: 'i'  // case-insensitive
         }
       });
@@ -101,7 +110,7 @@ export async function GET(request, { params }) {
     // Get total count for pagination info based on the search query
     const totalCount = await dataDb
       .collection(fileName)
-      .countDocuments(query);  // Use our search query here
+      .countDocuments(query, { maxTimeMS: QUERY_MAX_TIME_MS });
 
     console.log(`Found ${totalCount} total matches for query`);
 
@@ -117,6 +126,7 @@ export async function GET(request, { params }) {
       })
       .skip(skip)
       .limit(limit)
+      .maxTimeMS(QUERY_MAX_TIME_MS)
       .toArray();
 
     // Debug: Check for source_type field presence
@@ -178,7 +188,7 @@ export async function GET(request, { params }) {
     console.error('Error fetching dataset objects:', error);
     return NextResponse.json(
       {
-        message: error.message || 'Internal server error',
+        message: 'Internal server error',
         ...(error.details && { details: error.details })
       },
       { status: error.status || 500 }

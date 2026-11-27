@@ -2,11 +2,14 @@ import { NextResponse } from 'next/server';
 import { requestEmbeddings } from '@/app/lib/embeddings';
 import { requireUserId } from '@/app/lib/authz';
 import { forwardableModelUrl } from '@/app/lib/model-url';
+import { rateLimit } from '@/app/lib/rate-limit';
 
 export async function POST(request: Request) {
   try {
     const authz = await requireUserId();
     if ('error' in authz) return authz.error;
+    const limited = rateLimit(authz.userId, 'compute');
+    if (limited) return limited;
 
     console.log('🔥 Embeddings API called');
     const body = await request.json();
@@ -36,7 +39,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('❌ Embeddings API error:', error);
     return NextResponse.json(
-      { error: `Embeddings API error: ${error instanceof Error ? error.message : 'Unknown error'}` },
+      { error: 'Embeddings API error' },
       { status: 500 }
     );
   }

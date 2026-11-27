@@ -44,13 +44,22 @@ export async function GET() {
       }
     }
 
-    return NextResponse.json({ success: true, modelConfigs: merged });
+    // The configured model-server URL is an internal detail (often a GPU host
+    // with an open port), so it is not sent to the browser. The UI only needs
+    // to know whether a model is configured; the server routes requests to
+    // its own URL whatever the client sends back. In single-user mode, where
+    // users manage their own URLs, the real value is returned.
+    const visible = customModelUrlsAllowed()
+      ? merged
+      : merged.map((d) => ({ ...d, api_url: d.api_url ? 'server-configured' : '' }));
+
+    return NextResponse.json({ success: true, modelConfigs: visible });
   } catch (error) {
     console.error('Error fetching model configurations:', error);
     return NextResponse.json(
       {
         success: false,
-        message: error instanceof Error ? error.message : 'Internal server error',
+        message: 'Internal server error',
       },
       { status: 500 },
     );
@@ -104,7 +113,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         success: false,
-        message: error instanceof Error ? error.message : 'Internal server error',
+        message: 'Internal server error',
       },
       { status: 500 },
     );

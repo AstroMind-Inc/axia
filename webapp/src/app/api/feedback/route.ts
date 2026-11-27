@@ -3,6 +3,7 @@ import { connectToMongoDB } from "@/app/lib/mongodb";
 import { ObjectId } from "mongodb";
 import { MessageFeedback, FeedbackSubmission } from "@/app/types/chat-history";
 import { findOwnedThread, notFound, requireUserId } from "@/app/lib/authz";
+import { auth } from "@/auth";
 
 export async function POST(request: Request) {
   try {
@@ -21,7 +22,7 @@ export async function POST(request: Request) {
       feedback_details,
     } = body;
 
-    if (!message_id || !thread_id || !reviewer_info.name) {
+    if (!message_id || !thread_id || typeof reviewer_info?.name !== "string" || !reviewer_info.name) {
       return NextResponse.json(
         {
           message: "Missing required fields: message_id, thread_id, and reviewer name",
@@ -50,11 +51,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: "Message not found" }, { status: 404 });
     }
 
+    // Feedback is research data, so the reviewer's email comes from the
+    // signed-in Google account rather than the form, where anyone could
+    // type someone else's address.
+    const session = await auth();
     const newFeedback: Omit<MessageFeedback, "_id"> = {
       message_id,
       thread_id,
       timestamp: new Date(),
-      reviewer_info,
+      reviewer_info: {
+        name: reviewer_info.name.slice(0, 200),
+        role: typeof reviewer_info.role === "string" ? reviewer_info.role.slice(0, 200) : undefined,
+        email: session?.user?.email ?? undefined,
+      },
       source_context,
       conversation_context,
       agent_evaluations,
@@ -83,7 +92,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("Error submitting feedback:", error);
     return NextResponse.json(
-      { message: error instanceof Error ? error.message : "Internal server error" },
+      { message: "Internal server error" },
       { status: 500 },
     );
   }
